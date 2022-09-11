@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,float,amsfonts,enumitem,tcolorbox}
+
+\include{macros}
+
+\title{STA 521: Project 1 Redwood Data}
+\author{Yue Li, Tianyu Wu}
+\date{Due by: \textbf{3 PM, Thursday, Oct. 13}}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+\maketitle
+
+\section{Data Collection}
+
+(a) The paper studies the spatial variation and temporal dynamics of the microclimate surrounding a coastal redwood tree at different level heights. 
+
+(b) 
+
+\section{Data Cleaning}
+
+
+
+\section{Data Exploration}
+
+
+
+\section{Interesting Findings}
+
+
+
+\section{Graph Critique in the paper}
+
+
+\end{document}

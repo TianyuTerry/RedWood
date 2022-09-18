@@ -1,0 +1,252 @@
+---
+title: "project1_code"
+author: "Tianyu"
+date: "2022-09-18"
+output: html_document
+---
+
+### This is the R code demo for project 1 of STA 521, Fall 2022 ###
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(gridExtra)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+### 2(a) Check histogram of each variable. 
+log_data <- read_csv("RedwoodData/sonoma-data-log.csv")
+net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
+```
+
+```{r}
+loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
+loc_data
+```
+
+# Part 2 Data Cleaning
+
+## (a)
+
+First use summary to extract useful insights from summary statistics.
+
+```{r}
+variables = c("humidity", "humid_temp", "hamatop", "hamabot", "voltage")
+log_data |>
+  select(all_of(variables)) |>
+  summary()
+```
+
+```{r}
+net_data |>
+  select(all_of(variables)) |>
+  summary()
+```
+
+From the summary statistics we know that 
+1. Variable voltage for two datasets are not in the same domain.
+2. There are NAs for all of the datasets.
+
+We know from the paper that the incident and reflected PAR measurements were collected by two Hamamatsu S1087 photodiodes interfaced to the 10-bit
+ADC on Mica2Dot. From user manual (http://www-db.ics.uci.edu/pages/research/quasar/MPR-MIB%20Series%20User%20Manual%207430-0021-06_A.pdf Page 25) we found the formula of conversion to be $V_{batt} = V_{ref} \times ADC\_FS / ADC\_Count$. The voltage data from net dataset is converted to the right range after the conversion: 
+
+```{r}
+# 
+ADC_FS = 1024
+V_ref = 0.6 
+
+net_data |>
+  select(voltage) |>
+  mutate(voltage_battery = V_ref * ADC_FS / voltage) |>
+  summary()
+```
+
+To make sure the conversion is reasonable, plot the histogram of both voltage columns after removing NAs and outliers (Outlier detection and removal is covered in detail in part 2(d)).
+
+```{r}
+# Variable voltage
+plot1 <- log_data |>
+           filter(voltage >= 2) |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |>
+           filter(voltage <= 400) |>
+           mutate(voltage_battery = V_ref * ADC_FS / voltage) |>
+           ggplot(aes(x = voltage_battery)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+Some of the histograms of the raw data without handling outliers:
+
+```{r}
+# par(mfcol = c(2, 5))
+for (var in variables) {
+  plot1 <- ggplot(data = log_data, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+  plot2 <- ggplot(data = net_data, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50)
+  
+  # print(plot1)
+  # print(plot2)
+  grid.arrange(plot1, plot2, nrow = 2)
+  # plot3 <- grid.arrange(plot1, plot2, ncol = 2)
+  # print(plot3)
+}
+```
+
+
+```{r}
+# Variable humidity
+plot1 <- log_data |>
+           # filter(humidity >= 0, humidity <= 100) |>
+           ggplot(aes(x = humidity)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           # filter(humidity >= 0, humidity <= 100) |>
+           ggplot(aes(x = humidity)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r}
+# Variable temperature
+plot1 <- log_data |>
+           ggplot(aes(x = humid_temp)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           ggplot(aes(x = humid_temp)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r}
+# Variable voltage
+plot1 <- log_data |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+The takeaways are that:
+1. histograms are perfect tools for identifying existence of outliers.
+2. No essential information can be drawn from histograms unless the outliers are handled properly.
+
+## (b)
+
+It turns out that when a rows contains any NA, all four variables of interests are NA:
+
+```{r}
+colSums(is.na(log_data))
+sum(apply(log_data, 1, anyNA))
+colSums(is.na(net_data))
+sum(apply(net_data, 1, anyNA))
+```
+
+Identify corresponding date and time period:
+
+```{r}
+log_data_na <- log_data[rowSums(is.na(log_data)) > 0,]
+log_data_na |> 
+  select(result_time) |>
+  distinct()
+```
+
+```{r}
+net_data_na <- net_data[rowSums(is.na(net_data)) > 0,]
+net_data_na |> 
+  select(result_time) |>
+  distinct()
+```
+
+Remove missing values and do sanity check.
+
+```{r}
+nrow_log_data <- nrow(log_data)
+nrow_net_data <- nrow(net_data)
+log_data <- log_data |> drop_na()
+net_data <- net_data |> drop_na()
+nrow_log_data - nrow(log_data)
+nrow_net_data - nrow(net_data)
+```
+
+```{r}
+nrow(log_data)
+nrow(net_data)
+```
+
+## (c)
+
+```{r}
+merge(log_data, loc_data, by.x="nodeid", by.y="ID")
+```
+
+```{r}
+merge(net_data, loc_data, by.x="nodeid", by.y="ID")
+```
+
+(d)
+
+One possible solution is to use 1.5 x IQR Rule.
+Second possible solution is to use hard-coded values
+
+```{r}
+# Variable voltage
+plot1 <- log_data |>
+           filter(voltage >= 2) |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |>
+           filter(voltage <= 400) |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+
+
+```{r}
+# Variable humidity
+plot1 <- log_data |>
+           filter(humidity >= 0, humidity <= 100) |>
+           ggplot(aes(x = humidity)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           filter(humidity >= 0, humidity <= 100) |>
+           ggplot(aes(x = humidity)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r}
+# Variable temperature
+plot1 <- log_data |>
+           filter(humid_temp >= 0, humid_temp <= 40) |>
+           ggplot(aes(x = humid_temp)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           filter(humid_temp >= 0, humid_temp <= 40) |>
+           ggplot(aes(x = humid_temp)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+

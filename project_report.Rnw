@@ -14,7 +14,9 @@
 
 \section{Data Collection}
 
-(a) The paper studies the spatial variation and temporal dynamics of the microclimate surrounding a coastal redwood tree at different level heights. 
+(a)
+
+The Purpose is to study the spatial and temporal variation in temperature, humidity and light of a 70-meter tall redwood tree. The study was carried out in Sonama California. A wireless micro-weather station was designed and built to collect data for temperature(Celsius), humidity(\%RH) and light(incident and reflected photosynthetically active solar radiation) at different height across time. The sensors deployed at different height around the tree (Berkeley Motes) were calibrated before deployment, sent data via network gateway as well as stored data locally. The 
 
 (b) 
 

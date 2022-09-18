@@ -38,7 +38,7 @@ The study first measures traditional climate variables: temperature, humidity an
 
 \section{Data Cleaning}
 
-
+There is an obvious disparity on the scale of \texttt{voltage} data in the paper and in the dataset.
 
 \section{Data Exploration}
 

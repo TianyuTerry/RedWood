@@ -22,7 +22,6 @@ net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
 
 ```{r}
 loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
-loc_data
 ```
 
 # Part 2 Data Cleaning
@@ -62,7 +61,20 @@ net_data |>
   summary()
 ```
 
-To make sure the conversion is reasonable, plot the histogram of both voltage columns after removing NAs and outliers (Outlier detection and removal is covered in detail in part 2(d)).
+To make sure the conversion is reasonable, plot the histogram of both voltage columns after removing NAs and outliers from eye-ball checking (Outlier detection and removal is covered in detail in part 2(d)).
+
+```{r}
+# Variable voltage
+plot1 <- log_data |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |>
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
 
 ```{r}
 # Variable voltage
@@ -80,70 +92,12 @@ plot2 <- net_data |>
 grid.arrange(plot1, plot2, ncol = 2)
 ```
 
-Some of the histograms of the raw data without handling outliers:
+We can safely replace original voltage with the transformed values.
 
 ```{r}
-# par(mfcol = c(2, 5))
-for (var in variables) {
-  plot1 <- ggplot(data = log_data, aes_string(x = var)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-  plot2 <- ggplot(data = net_data, aes_string(x = var)) +
-           geom_histogram(na.rm = T, bins = 50)
-  
-  # print(plot1)
-  # print(plot2)
-  grid.arrange(plot1, plot2, nrow = 2)
-  # plot3 <- grid.arrange(plot1, plot2, ncol = 2)
-  # print(plot3)
-}
+net_data <- net_data |>
+              mutate(voltage = V_ref * ADC_FS / voltage)
 ```
-
-
-```{r}
-# Variable humidity
-plot1 <- log_data |>
-           # filter(humidity >= 0, humidity <= 100) |>
-           ggplot(aes(x = humidity)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-plot2 <- net_data |> 
-           # filter(humidity >= 0, humidity <= 100) |>
-           ggplot(aes(x = humidity)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-grid.arrange(plot1, plot2, ncol = 2)
-```
-
-```{r}
-# Variable temperature
-plot1 <- log_data |>
-           ggplot(aes(x = humid_temp)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-plot2 <- net_data |> 
-           ggplot(aes(x = humid_temp)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-grid.arrange(plot1, plot2, ncol = 2)
-```
-
-```{r}
-# Variable voltage
-plot1 <- log_data |>
-           ggplot(aes(x = voltage)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-plot2 <- net_data |>
-           ggplot(aes(x = voltage)) +
-           geom_histogram(na.rm = T, bins = 50)
-
-grid.arrange(plot1, plot2, ncol = 2)
-```
-
-The takeaways are that:
-1. histograms are perfect tools for identifying existence of outliers.
-2. No essential information can be drawn from histograms unless the outliers are handled properly.
 
 ## (b)
 
@@ -165,11 +119,68 @@ log_data_na |>
   distinct()
 ```
 
+Number of rows after distinct() is the same as number of NA. In other words, all result_time are different.
+
 ```{r}
 net_data_na <- net_data[rowSums(is.na(net_data)) > 0,]
 net_data_na |> 
   select(result_time) |>
   distinct()
+```
+
+Examine more on row 9 and row 10 as they are the same when displayed above.
+
+```{r}
+net_data_na_time <- net_data_na |> 
+                      select(result_time) |>
+                      distinct()
+na_result_time <- net_data_na_time$result_time
+na_result_time[9] - na_result_time[10]
+```
+
+It turns out that the difference is in seconds. Therefore, we can round the date time to minutes level. As can be seen below, 3756/4262 rows remain. All of them indeed have different date and time.
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "mins"))) |>
+  distinct()
+```
+
+514/4262 rows remain if round to hours
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
+  group_by(result_time) |>
+  dplyr::summarise(count = n())
+  # dplyr::count(result_time) equivalent
+```
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
+  ggplot(aes(x = result_time)) +
+  geom_bar()
+```
+
+The time spans 22 days from May 08 to May 29 (everyday in this span).
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
+  dplyr::count(result_time)
+```
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
+  ggplot(aes(x = result_time)) +
+  geom_bar()
 ```
 
 Remove missing values and do sanity check.
@@ -190,18 +201,117 @@ nrow(net_data)
 
 ## (c)
 
-```{r}
-merge(log_data, loc_data, by.x="nodeid", by.y="ID")
-```
+First check that location data is distinct on ID column:
 
 ```{r}
-merge(net_data, loc_data, by.x="nodeid", by.y="ID")
+nrow(loc_data |> 
+        select(ID) |>
+        distinct()) == nrow(loc_data)
 ```
 
-(d)
+286700/292786 rows remain after joining for log data.
+
+```{r}
+log_data_loc <- merge(log_data, loc_data, by.x="nodeid", by.y="ID")
+nrow(log_data)
+nrow(log_data_loc)
+```
+
+110433/110718 rows remain after joining for net data.
+
+```{r}
+net_data_loc <- merge(net_data, loc_data, by.x="nodeid", by.y="ID")
+nrow(net_data)
+nrow(net_data_loc)
+```
+
+## (d)
+
+```{r}
+log_data_five_num <- fivenum(log_data_loc[["voltage"]])
+names(log_data_five_num) <- c("min", "Q1", "median", "Q3", "max")
+log_data_five_num["Q1"]
+```
+
+Some of the histograms of the raw data together with Q1/median/Q3 without handling outliers:
+
+```{r}
+# par(mfcol = c(2, 5))
+for (var in variables) {
+  log_data_five_num <- fivenum(log_data_loc[[var]])
+  names(log_data_five_num) <- c("min", "Q1", "median", "Q3", "max")
+  plot1 <- ggplot(data = log_data_loc, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           geom_vline(xintercept = log_data_five_num["Q1"], linetype="dotted", color = "red") +
+           geom_vline(xintercept = log_data_five_num["median"], linetype="dotted", color = "red") + 
+           geom_vline(xintercept = log_data_five_num["Q3"], linetype="dotted", color = "red")
+  
+  net_data_five_num <- fivenum(net_data_loc[[var]])
+  names(net_data_five_num) <- c("min", "Q1", "median", "Q3", "max")
+  plot2 <- ggplot(data = net_data_loc, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           geom_vline(xintercept = net_data_five_num["Q1"], linetype="dotted", color = "red") +
+           geom_vline(xintercept = net_data_five_num["median"], linetype="dotted", color = "red") + 
+           geom_vline(xintercept = net_data_five_num["Q3"], linetype="dotted", color = "red")
+  
+  # print(plot1)
+  # print(plot2)
+  grid.arrange(plot1, plot2, nrow = 2)
+  # plot3 <- grid.arrange(plot1, plot2, ncol = 2)
+  # print(plot3)
+}
+```
+
+The takeaways are that:
+1. histograms are perfect tools for identifying existence of outliers.
+2. No essential information can be drawn from histograms unless the outliers are handled properly.
 
 One possible solution is to use 1.5 x IQR Rule.
-Second possible solution is to use hard-coded values
+
+```{r}
+for (var in variables) {
+  five_num <- fivenum(log_data_loc[[var]])
+  Q1 <- five_num[2]
+  Q3 <- five_num[4]
+  IQR <- Q3 - Q1
+  log_data_loc_clean <- log_data_loc |>
+                          filter(!!as.symbol(var) >= Q1-1.5*IQR, !!as.symbol(var) <= Q3+1.5*IQR)
+  five_num <- fivenum(log_data_loc_clean[[var]])
+  Q1 <- five_num[2]
+  median <- five_num[3]
+  Q3 <- five_num[4]
+  plot1 <- ggplot(data = log_data_loc_clean, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           geom_vline(xintercept = Q1, linetype = "dotted", color = "red") +
+           geom_vline(xintercept = median, linetype = "dotted", color = "red") + 
+           geom_vline(xintercept = Q3, linetype = "dotted", color = "red")
+  
+  five_num <- fivenum(net_data_loc[[var]])
+  Q1 <- five_num[2]
+  Q3 <- five_num[4]
+  IQR <- Q3 - Q1
+  net_data_loc_clean <- net_data_loc |>
+                          filter(!!as.symbol(var) >= Q1-1.5*IQR, !!as.symbol(var) <= Q3+1.5*IQR)
+  five_num <- fivenum(net_data_loc_clean[[var]])
+  Q1 <- five_num[2]
+  median <- five_num[3]
+  Q3 <- five_num[4]
+  plot2 <- ggplot(data = net_data_loc_clean, aes_string(x = var)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           geom_vline(xintercept = Q1, linetype = "dotted", color = "red") +
+           geom_vline(xintercept = median, linetype = "dotted", color = "red") + 
+           geom_vline(xintercept = Q3, linetype = "dotted", color = "red")
+  
+  grid.arrange(plot1, plot2, nrow = 2)
+}
+```
+
+This turns out to fail, some evidence:
+1. For humidity in log data, values smaller than 0 and larger than 100 are not fully removed.
+2. For hamabot in both log and net data, only values of 0 are kept because both Q1 and Q3 are 0.
+Therefore, quantile-based outlier rejection is not working.
+
+Second possible solution is to use hard-coded values. But it is very hard to determine the threshold for hamatop and hamabot: Values tend to spread out equally and evenly within reasonable ranges without sudden drop. The absence of sudden drop makes it hard to determine the proper threshold.
 
 ```{r}
 # Variable voltage
@@ -217,8 +327,6 @@ plot2 <- net_data |>
 
 grid.arrange(plot1, plot2, ncol = 2)
 ```
-
-
 
 ```{r}
 # Variable humidity
@@ -249,4 +357,38 @@ plot2 <- net_data |>
 
 grid.arrange(plot1, plot2, ncol = 2)
 ```
+
+```{r}
+# Variable hamatop
+plot1 <- log_data |>
+           filter(hamatop <= 15000) |>
+           ggplot(aes(x = hamatop)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           filter(hamatop <= 15000) |>
+           ggplot(aes(x = hamatop)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r}
+# Variable hamabot
+plot1 <- log_data |>
+           filter(hamabot <= 5000) |>
+           ggplot(aes(x = hamabot)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+plot2 <- net_data |> 
+           filter(hamabot <= 5000) |>
+           ggplot(aes(x = hamabot)) +
+           geom_histogram(na.rm = T, bins = 50)
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+
+
+
 

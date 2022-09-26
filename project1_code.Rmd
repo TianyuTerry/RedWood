@@ -119,6 +119,21 @@ log_data_na |>
   distinct()
 ```
 
+However, note that the log data has the same result_time. Therefore, we should consider using epoch.
+
+```{r}
+log_data_loc |>
+  select(result_time) |>
+  distinct()
+```
+
+```{r}
+log_data_na |> 
+  select(epoch) |>
+  distinct()
+```
+
+
 Number of rows after distinct() is the same as number of NA. In other words, all result_time are different.
 
 ```{r}
@@ -315,13 +330,13 @@ Second possible solution is to use hard-coded values. But it is very hard to det
 
 ```{r}
 # Variable voltage
-plot1 <- log_data |>
+plot1 <- log_data_loc |>
            filter(voltage >= 2) |>
            ggplot(aes(x = voltage)) +
            geom_histogram(na.rm = T, bins = 50)
 
-plot2 <- net_data |>
-           filter(voltage <= 400) |>
+plot2 <- net_data_loc |>
+           filter(voltage >= 2) |>
            ggplot(aes(x = voltage)) +
            geom_histogram(na.rm = T, bins = 50)
 
@@ -330,12 +345,12 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 ```{r}
 # Variable humidity
-plot1 <- log_data |>
+plot1 <- log_data_loc |>
            filter(humidity >= 0, humidity <= 100) |>
            ggplot(aes(x = humidity)) +
            geom_histogram(na.rm = T, bins = 50)
 
-plot2 <- net_data |> 
+plot2 <- net_data_loc |> 
            filter(humidity >= 0, humidity <= 100) |>
            ggplot(aes(x = humidity)) +
            geom_histogram(na.rm = T, bins = 50)
@@ -345,12 +360,12 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 ```{r}
 # Variable temperature
-plot1 <- log_data |>
+plot1 <- log_data_loc |>
            filter(humid_temp >= 0, humid_temp <= 40) |>
            ggplot(aes(x = humid_temp)) +
            geom_histogram(na.rm = T, bins = 50)
 
-plot2 <- net_data |> 
+plot2 <- net_data_loc |> 
            filter(humid_temp >= 0, humid_temp <= 40) |>
            ggplot(aes(x = humid_temp)) +
            geom_histogram(na.rm = T, bins = 50)
@@ -360,12 +375,12 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 ```{r}
 # Variable hamatop
-plot1 <- log_data |>
+plot1 <- log_data_loc |>
            filter(hamatop <= 15000) |>
            ggplot(aes(x = hamatop)) +
            geom_histogram(na.rm = T, bins = 50)
 
-plot2 <- net_data |> 
+plot2 <- net_data_loc |> 
            filter(hamatop <= 15000) |>
            ggplot(aes(x = hamatop)) +
            geom_histogram(na.rm = T, bins = 50)
@@ -375,12 +390,12 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 ```{r}
 # Variable hamabot
-plot1 <- log_data |>
+plot1 <- log_data_loc |>
            filter(hamabot <= 5000) |>
            ggplot(aes(x = hamabot)) +
            geom_histogram(na.rm = T, bins = 50)
 
-plot2 <- net_data |> 
+plot2 <- net_data_loc |> 
            filter(hamabot <= 5000) |>
            ggplot(aes(x = hamabot)) +
            geom_histogram(na.rm = T, bins = 50)
@@ -388,7 +403,296 @@ plot2 <- net_data |>
 grid.arrange(plot1, plot2, ncol = 2)
 ```
 
+Examine the battery voltage when there are known anomalies:
+
+```{r}
+log_data_loc |>
+  filter(humidity < 0 | humidity > 100 | humid_temp < 0 | humid_temp > 40 | hamatop > 15000 | hamabot > 5000) |>
+  select(voltage) |>
+  ggplot(aes(x = voltage)) +
+  geom_histogram(bins = 50)
+```
+
+```{r}
+net_data_loc |>
+  filter(humidity < 0 | humidity > 100 | humid_temp < 0 | humid_temp > 40 | hamatop > 15000 | hamabot > 5000) |>
+  select(voltage) |>
+  ggplot(aes(x = voltage)) +
+  geom_histogram(bins = 50)
+```
 
 
+It looks extremely abnormal. To confirm the guess, draw the histogram when readings are reasonable:
 
+```{r}
+log_data_loc |>
+  filter(humidity >= 0, humidity <= 100, humid_temp >= 0, humid_temp <= 40, hamatop <= 15000, hamabot <= 5000) |>
+  select(voltage) |>
+  ggplot(aes(x = voltage)) +
+  geom_histogram(bins = 50)
+```
+
+```{r}
+log_data_loc |>
+  filter(humidity >= 0, humidity <= 100, humid_temp >= 0, humid_temp <= 40, hamatop <= 2000, hamabot <= 200) |>
+  select(voltage) |>
+  ggplot(aes(x = voltage)) +
+  geom_histogram(bins = 50)
+```
+
+Voltage still looks abnormal..........
+
+```{r}
+nrow(loc_data)
+nrow(log_data_loc |> 
+       select(nodeid) |>
+       distinct())
+nrow(net_data_loc |> 
+       select(nodeid) |>
+       distinct())
+```
+
+```{r}
+log_data_loc |>
+  mutate(abnormal = case_when(humid_temp >= 40 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal)
+```
+
+conclusion: not too many abnormal readings.
+
+```{r}
+net_data_loc |>
+  mutate(abnormal = case_when(humid_temp >= 40 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal)
+```
+
+Selected nodeid from net_data: 3/78/123/141/145
+
+```{r}
+net_data_loc |>
+  filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = result_time, y = humid_temp)) +
+  geom_line(aes(colour = nodeid))
+```
+
+```{r}
+net_data_loc |>
+  filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = result_time, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+```
+
+Node 123/3/78 demonstrate the correlation mentioned in the thesis. Node 141 and 145 have problematic reading for voltage throughout the experiment. It's valid to drop readings with very low voltage.
+
+```{r}
+log_data_loc |>
+  mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal) |>
+  filter(abnormal == 1) |>
+  select(nodeid, n) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_log_hum <- log_data_loc |>
+                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+plot1 <- merge(log_data_loc, nodeid_log_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = humidity)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(log_data_loc, nodeid_log_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+```{r}
+nodeid_log_hum <- log_data_loc |>
+                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 900, n <= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+plot1 <- merge(log_data_loc, nodeid_log_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = humidity)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(log_data_loc, nodeid_log_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+```{r}
+net_data_loc |>
+  mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal) |>
+  filter(abnormal == 1) |>
+  select(nodeid, n) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_hum <- net_data_loc |>
+                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+
+plot1 <- merge(net_data_loc, nodeid_net_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = humidity)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(net_data_loc, nodeid_net_hum, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+Conclusion: there's no correlation between abnormal humidity reading and voltage reading for both datasets. Nodes tend to have similar trend. Therefore, those readings above 100 should be considered not accurate enough but they exhibit valid trend. Moreover, datasets have similar summary statistics. So we'll only consider net data for rest of the variables.
+
+```{r}
+net_data_loc |>
+  mutate(abnormal = case_when(hamatop >= 15000 ~ 1,
+                              TRUE ~ 0)) |>
+  group_by(nodeid, Height, abnormal) |>
+  dplyr::summarise(n = n(), .groups = "drop") |>
+  filter(abnormal == 1) |>
+  select(nodeid, n, Height) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_top <- net_data_loc |>
+                    mutate(abnormal = case_when(hamatop >= 15000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1400) |>
+                    select(nodeid) |>
+                    distinct()
+
+plot1 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = hamatop)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+```{r}
+nodeid_net_top <- net_data_loc |>
+                    mutate(abnormal = case_when(hamatop >= 15000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1300, n <= 1400) |>
+                    select(nodeid) |>
+                    distinct()
+
+plot1 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = hamatop)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+```{r}
+nodeid_net_top <- net_data_loc |>
+                    mutate(abnormal = case_when(hamatop >= 15000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1000, n <= 1300) |>
+                    select(nodeid) |>
+                    distinct()
+
+plot1 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = hamatop)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(net_data_loc, nodeid_net_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+The conclusion is that those very high readings are valid. They indeed reflects the actual incident light intensity. What's interesting is to notice that the node 138 in the last graph matches with the voltage correlation. The readings are gone after observing very low voltage.
+
+```{r}
+net_data_loc |>
+  mutate(abnormal = case_when(hamabot >= 4000 ~ 1,
+                              TRUE ~ 0)) |>
+  group_by(nodeid, Height, abnormal) |>
+  dplyr::summarise(n = n(), .groups = "drop") |>
+  filter(abnormal == 1) |>
+  select(nodeid, n, Height) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_bottom <- net_data_loc |>
+                    mutate(abnormal = case_when(hamabot >= 4000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 300) |>
+                    select(nodeid) |>
+                    distinct()
+
+plot1 <- merge(net_data_loc, nodeid_net_bottom, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = hamabot)) +
+  geom_line(aes(colour = nodeid))
+
+plot2 <- merge(net_data_loc, nodeid_net_bottom, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = epoch, y = voltage)) +
+  geom_line(aes(colour = nodeid))
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+All 3 nodes exhibit same trend: they tend to reach peak at the same time. The conclusion is that the bottom readings are valid as well. 
+
+All we need to do is to remove the readings that are absolutely wrong (way off) for humidity/hamatop/hamabot.
 

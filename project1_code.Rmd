@@ -15,7 +15,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-### 2(a) Check histogram of each variable. 
 log_data <- read_csv("RedwoodData/sonoma-data-log.csv")
 net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
 loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
@@ -541,6 +540,7 @@ net_data_loc |>
   filter(voltage > 2.4) |>
   arrange(desc(humid_temp))
 ```
+
 Manually removing two more outliers gives clean distribution. Notice that two outliers come from problematic node 123.
 
 ```{r}
@@ -549,6 +549,7 @@ net_data_loc |>
   ggplot(aes(x = humid_temp)) +
   geom_histogram(bins = 50)
 ```
+
 Next is to check other readings when voltage is low.
 
 It's interesting to see that low voltage correlates with negative humidity.
@@ -558,6 +559,7 @@ log_data_loc |>
   filter(voltage <= 2.4) |>
   arrange(humidity)
 ```
+
 If drop values by low voltage, quite a number of normal observations need to be dropped.
 
 ```{r}
@@ -716,6 +718,7 @@ log_data_loc |>
   filter(voltage <= 2.4, nodeid != 198, nodeid != 29) |>
   arrange(desc(hamatop))
 ```
+
 For hamatop, except for nodeid 40, everything else is within normal ranges.
 
 ```{r}
@@ -723,6 +726,7 @@ log_data_loc |>
   filter(nodeid != 198, nodeid != 29) |>
   arrange(desc(hamatop))
 ```
+
 Investigate into node 40, readings are gone after only 100 epoch and abnormal readings are located in the later epochs. We'd better remove all of the reading from this node.
 
 ```{r}
@@ -758,6 +762,7 @@ plot2 <- merge(log_data_loc, nodeid_log_low_voltage, by = "nodeid") |>
 
 grid.arrange(plot1, plot2, nrow = 2)
 ```
+
 When dealing with net data, remove all low voltage readings and outliers from node 118. All are within normal ranges.
 
 ```{r}
@@ -784,7 +789,6 @@ merge(net_data_loc, nodeid_net_hamatop, by = "nodeid") |>
   ggplot(aes(x = epoch, y = hamatop)) +
   geom_line(aes(colour = nodeid))
 ```
-
 
 Finally, we deal with hamabot (for net). Everything looks fine. No outliers.
 
@@ -864,7 +868,6 @@ plot2 <- log_data_loc |>
 grid.arrange(plot1, plot2)
 ```
 
-
 ```{r}
 nodeid_log_hamabot <- net_data_loc |>
   filter(nodeid != 29, nodeid != 40, humidity >= -5000) |>
@@ -922,7 +925,6 @@ net_data_loc_clean |>
   select(all_of(variables)) |>
   summary()
 ```
-
 
 ```{r}
 log_data_loc_clean |>
@@ -1130,7 +1132,26 @@ grid.arrange(plot1, plot2, nrow = 2)
 
 All 3 nodes exhibit same trend: they tend to reach peak at the same time. The conclusion is that the bottom readings are valid as well. 
 
-Right now all min/max in the summary statistics for 4 variables are properly solved/explained.
+Right now all min/max in the summary statistics for 4 variables are properly solved/explained. Final step is to check statistics for data cleaning. 10580/110433 removed for net data and 1597/286700 removed for log data.
+
+```{r}
+nrow(net_data_loc)
+nrow(net_data_loc_clean)
+nrow(net_data_loc) - nrow(net_data_loc_clean)
+```
+
+```{r}
+nrow(log_data_loc)
+nrow(log_data_loc_clean)
+nrow(log_data_loc) - nrow(log_data_loc_clean)
+```
+
+Replace variables.
+
+```{r}
+net_data_loc <- net_data_loc_clean
+log_data_loc <- log_data_loc_clean
+```
 
 ## Part 3: Data Exploration
 
@@ -1139,22 +1160,47 @@ Right now all min/max in the summary statistics for 4 variables are properly sol
   # rename(reflected = hamabot, incident = hamatop)
 head(net_data_loc, 10)
 ```
+
 ```{r}
-min(net_data_loc$result_time)
-max(net_data_loc$result_time)
+head(log_data_loc, 10)
+```
+
+(a)
+
+```{r}
+intersect <- inner_join(net_data_loc, log_data_loc, by = c("nodeid", "epoch"))
+intersect <- select(intersect, -16:-28)
+# pick time period
+intersect$result_time.x <- as.POSIXct(strptime(intersect$result_time.x, 
+                                               format = "%A %b %d %H:%M:%S %Y"))
+intersect %>%
+  select(nodeid, result_time.x, Height.x) %>%
+  ggplot() +
+  geom_point(aes(x = result_time.x, y = as.factor(nodeid), color = Height.x), size = 0.1) +
+  labs(x = "Days", y = "nodeid") +
+  geom_vline(xintercept = as.numeric(as.POSIXct(c("2004/05/07 11:25:00","2004/05/26 9:00:00")))) +
+  annotate("text", x = as.POSIXct("2004/05/24 23:00:00"), y = 3, 
+           label = "9:00 am, May 26", size = 4) +
+  annotate("text", x = as.POSIXct("2005/05/09 9:00:00"), y = 3,
+           label = "11:25 am, May 7", size = 4)
+```
+
+```{r}
+library(GGally)
+ggpairs(select(net_data_loc, humidity, humid_temp, hamatop, hamabot, Height))
 ```
 
 ```{r}
 fig1 <- net_data_loc %>%
-  filter(date(result_time) < '2004-05-15') %>%
-  ggplot(aes(x = incident, y = reflected)) +
+  filter(as.POSIXct(result_time) < '2004-05-15') %>%
+  ggplot(aes(x = hamatop, y = hamabot)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
   labs(title = "", x = "Incident PAR", y = "Reflected PAR") +
   theme_bw()
 
 fig2 <- net_data_loc %>%
-  filter(date(result_time) < '2004-05-15') %>%
+  filter(as.POSIXct(result_time) < '2004-05-15') %>%
   ggplot(aes(x = humid_temp, y = humidity)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
@@ -1167,8 +1213,8 @@ grid.arrange(fig1, fig2, ncol = 2)
 
 ```{r}
 fig3 <- net_data_loc %>%
-  filter(date(result_time) < '2004-06-03') %>%
-  ggplot(aes(x = incident, y = Height)) +
+  filter(as.POSIXct(result_time) < '2004-06-03') %>%
+  ggplot(aes(x = hamatop, y = Height)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
   labs(title = "", x = "Incident PAR", y = "Node Height") +
@@ -1178,7 +1224,7 @@ grid.arrange(fig3, ncol = 1)
 
 
 ```{r fig.width=15, fig.height=8}
-# par(mfrow = c(2,2))
+library(lubridate)
 
 temp_plot <- net_data_loc %>%
   filter(date(result_time) < '2004-06-02') %>%
@@ -1205,8 +1251,8 @@ humidity_plot <- net_data_loc %>%
 incident_plot <- net_data_loc %>%
   filter(date(result_time) < '2004-06-02') %>%
   group_by(date = date(result_time), Height) %>%
-  summarise(across(incident, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = incident, color = Height, group = Height)) +
+  summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = Height, group = Height)) +
   geom_line() +
   scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
@@ -1216,8 +1262,8 @@ incident_plot <- net_data_loc %>%
 reflected_plot <- net_data_loc %>%
   filter(date(result_time) < '2004-06-02') %>%
   group_by(date = date(result_time), Height) %>%
-  summarise(across(reflected, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = reflected, color = Height, group = Height)) +
+  summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = Height, group = Height)) +
   geom_line() +
   scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
@@ -1225,4 +1271,110 @@ reflected_plot <- net_data_loc %>%
   theme_bw()
 
 grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+(d) PCA: 
+```{r}
+pca <- net_data_loc %>%
+  select(humidity, humid_temp, hamatop, hamabot) %>% 
+  prcomp(center = TRUE, scale = TRUE)
+# screeplot
+pca$sdev^2 %>%
+  data.frame(PC = c(1:4), Eigenvalue = .) %>%
+  ggplot(., aes(x = PC, y = Eigenvalue)) +
+  geom_point() +
+  geom_line()
+```
+
+## Part 4: Interesting findings
+
+```{r}
+# KMeans
+height <- net_data_loc %>%
+  group_by(Height) %>%
+  summarise(across(c(humidity, humid_temp), mean))
+
+set.seed(2022)
+cluster <- height %>%
+  select(-Height) %>%
+  kmeans(centers = 2, nstart = 10)
+
+height %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = Height, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "", x = "Height (m)", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+```
+
+
+```{r}
+# GMM
+library(mixtools)
+df <- net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07",]
+em <- mvnormalmixEM(df[, c("humidity", "humid_temp")])
+plot(em, whichplots = 2)
+```
+
+```{r}
+df$gmm_group_1 <- em$posterior[, 1] > 0.5 # T for group 1, F for group 2
+df %>%
+  ggplot() +
+  geom_point(aes(x = humidity, y = humid_temp, group = gmm_group_1, color = gmm_group_1))
+df %>%
+  ggplot() +
+  geom_point(aes(x = Height, y = result_time, group = gmm_group_1, color = gmm_group_1))
+```
+
+```{r}
+# PCA
+pca
+autoplot(pca, col = "hamabot", label = FALSE, loadings.label = TRUE) +
+  theme_classic()
+```
+
+```{r}
+# HC
+library(cluster)
+net_data_loc = cbind(net_data_loc, data.matrix(pca$x)[, c(1, 2)])
+df1 <- net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07", c("PC1", "PC2")]
+m <- c("average", "single", "complete", "ward")
+names(m) <- c("average", "single", "complete", "ward")
+agg_coeff <- function(x){
+  agnes(df1, method = x)$ac
+}
+result <- sapply(m, agg_coeff)
+result # ward has the highest agglomerative coeff
+```
+
+```{r}
+cluster <- df1 %>%
+  agnes(method = "ward")
+pltree(cluster, cex = 0.6, hang = -1, main = "Dendogram") # plot the tree
+# apply gap statistic to compare total intra-cluster variation
+gap_stat <- clusGap(df1, FUN = hcut, nstart = 25, K.max = 10, B = 50)
+# choose k with the highest gap statistic
+fviz_gap_stat(gap_stat)
+```
+
+```{r}
+final_clust <- hclust(dist(df1, method = "euclidean"), method = "ward.D2")
+agnes_group <- cutree(final_clust, k = 5)
+df1 <- data.frame(cbind(net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07", ], agnes_group = as.factor(agnes_group)))
+df1 %>% 
+  ggplot() +
+  geom_point(aes(result_time, Height, group = agnes_group, color = agnes_group), alpha = 0.5)
+df1[df1$agnes_group == 4|df1$agnes_group == 5, ] %>%
+  ggplot() +
+  geom_point(aes(humid_temp, humidity, group = agnes_group, color = agnes_group), alpha = 0.5)
+```
+
+```{r}
+df1[df1$agnes_group == 4 & df1$humid_temp < 11 & df1$humidity > 95, ]$hamabot
+df1[df1$agnes_group == 4 & df1$humid_temp < 11 & df1$humidity > 95, ]$hamatop
+# doesn't have low temperature and humidity
+# low_temp & high humidity in 4: hamabot all between 20-40; hamatop all 0
+unique(df1[df1$agnes_group == 4, ]$Direc)
+unique(df1[df1$agnes_group == 5, ]$Direc)
 ```

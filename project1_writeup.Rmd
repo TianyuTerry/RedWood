@@ -1,0 +1,587 @@
+---
+title: "Project 1 - Redwood Data Report"
+author:
+- Yue Li
+- Tianyu Wu
+date: "2022/10/13"
+output:
+  pdf_document:
+    toc: yes
+  bookdown::pdf_document2:
+    toc: yes
+header-includes:
+- \usepackage{caption}
+- \usepackage{float}
+- \floatplacement{figure}{H}
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+  )
+```
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(ggfortify)
+library(cluster)
+library(mixtools)
+library(lubridate)
+library(GGally)
+```
+
+# 1. Data Collection
+
+(a) The paper studies the spatial and temporal dynamics of the microclimate surrounding a coastal redwood tree at different level heights. The paper considers temperature, relative humidity, and sunlight levels (measured by \texttt{incident PAR} and \texttt{reflected PAR}) as the primary factors for characterizing microclimate variations of the redwood tree. Data was collected for a period of 44 days on a 70-meter tall redwood tree. The team uses the "macroscopic" wireless sensor network by putting sensor nodes packaged in weather chambers on different sections of tree with variation in height, angular location and radial distance. This study improves the variation details of the above factors on temporal scale, since previous studies only showed that there are variations across spatial scale but not on temporal scale. The group collected data after the 44-day experiment period and analyzed the performance of the sensor network on capturing temporal trends of data to improve accuracy of future sensor deployment. 
+
+Here are some impacts we obtained from the paper on the sensor deployment:
+
+The small variations in sensor positions (\texttt{height}) might lead to large differences in data collected, provided that the sensors are small enough and the phenomenon gets directional enough. As can be seen in the patterns of PAR data versus time, the data readings fluctuate according the sun's movement due to the belief that the wind moved the foliage and blocked sunlight access to the nodes. However, as can be seen in Figure 8, the patterns are actually consistent on different days. This contrast suggests that different orientations for each sensor result in different fluctuation patterns. The noisy data was a response from a highly-focused sensor.
+
+To record the long-term performance of the sensor network for capturing data, network management is crucial. The paper suggests that one should include a network monitoring component that can evaluate the performance of the network timely and can report abnormalities. In the current study, the local logs ran out of space for data storage during the data collection period and led to network failure. Therefore, the network can serve as a way to detect and compensate for failures in logging. The logging can compensate for failures in the network.
+
+The study explored the existence of spatial gradients in the microclimate and collected sufficient to see the variation of the gradients with respect to time. One can make use of the data for validating biological theories. Plant biologists can build a model of the effect of microclimate gradients on the sap flow rate to visualize the rate of sap flow varies over time with respect to humidity, temperature and PAR.
+
+(b) Before deploying the sensors on the tree, the study performed roof and chamber calibration checks. The calibration process evaluates performance data on different subsets of the sensors. Roof calibration establishes that PAR sensors are producing acceptable findings. Chamber calibration is a two-point calibration process to obtain responses of temperature and humidity. 
+
+The deployment package protects the electronics from the weather and safely exposes the sensors. All sensored are sampled every 5 minutes during one month in early summer, containing the most dynamic microclimatic variation. The nodes are placed on the west side of the tree. The nodes are placed 15 meters to 70 meters above ground level, with about 2-meter spacing between nodes, and at a radial distance of 0.1-1.0 meter from the trunk. Meanwhile, some nodes are placed out of the default angular and radial ranges to measure the microclimate nearby. 
+
+For data storage and management, the study included a local data logging system. The logger recorded readings taken by the queries before passing to multi-hop routing layer and stopped recording when the flash chip is full. The complete data logger was deployed  since the capacity of the flash was sufficient for the duration of the data collection process.
+
+The study first measures traditional climate variables: temperature, humidity and light levels. Temperature and humidity are parts of the transpiration model. The two variables connected sunlight levels are incident PAR and reflected PAR. Incident PAR quantifies the energy available for photosynthesis. In the dataset, these variable are: humidity (\texttt{humidity}), temperature (\texttt{humid temp}) and PAR measured on the top and at the bottom of the sensor (\texttt{hamatop} and \texttt{hamabot} respectively). \texttt{sonoma-data-log} dataset consists of data stored locally during the data collection process. \texttt{sonoma-data-net} constitutes data transmitted to the database during the data collection process. \texttt{mote-location-data} records the height, direction, radial distance and relative location to tree of the sensors. This dataset can help us analyze the temporal and spatial effect of the climate variables. \texttt{sonoma-dates} matches the epochs with the correct times. 
+
+# 2. Data Cleaning
+
+```{r}
+log_data <- read_csv("~/sta 521 proj1/sonoma-data-log.csv")
+net_data <- read_csv("~/sta 521 proj1/sonoma-data-net.csv")
+loc_data <- read.table("~/sta 521 proj1/mote-location-data.txt", header = T, sep = "")
+date0 = read.delim('~/sta 521 proj1/sonoma-dates', header = F)
+# epochNums
+epochNums = substring(date0[1,1], 14, nchar(date0[1,1])-3)
+epochNums = strsplit(epochNums, " ")
+epochNums = as.numeric(unlist(epochNums))
+# epochDates
+epochDates = substring(date0[2,1], 16, nchar(date0[2,1])-4)
+epochDates = strsplit(epochDates, "\' \'")
+epochDates = as.POSIXlt(unlist(epochDates), format = "%a %b  %d %H:%M:%S %Y")
+# epochDays
+epochDays = substring(date0[3,1], 14, nchar(date0[3,1])-3)
+epochDays = strsplit(epochDays, " ")
+epochDays = as.numeric(unlist(epochDays))
+# create the new data frame
+new_date0 = data.frame(epochNums, epochDates, epochDays)
+colnames(new_date0)[1] = "epoch"
+colnames(new_date0)[2] = "result_time"
+colnames(new_date0)[3] = "result_days"
+```
+
+
+## (a)
+
+First use summary to extract useful insights from summary statistics.
+
+
+```{r}
+# 
+ADC_FS = 1024
+V_ref = 0.6 
+
+net_data |>
+  select(voltage) |>
+  mutate(voltage_battery = V_ref * ADC_FS / voltage) |>
+  summary()
+```
+
+
+```{r}
+net_data <- net_data |>
+              mutate(voltage = V_ref * ADC_FS / voltage)
+```
+
+
+```{r}
+log_data_na <- log_data[rowSums(is.na(log_data)) > 0,]
+log_data_na |> 
+  select(result_time) |>
+  distinct()
+```
+
+
+```{r}
+log_data |>
+  select(result_time) |>
+  distinct()
+```
+
+```{r}
+log_data_na |> 
+  select(epoch) |>
+  distinct() |>
+  arrange(epoch)
+```
+
+
+```{r}
+log_data_na |> 
+  select(epoch) |>
+  ggplot(aes(x = epoch)) +
+  geom_bar()
+```
+
+
+```{r}
+log_data_na |> 
+  group_by(nodeid) |>
+  dplyr::summarise(
+    count = n(),
+    start = min(epoch),
+    end = max(epoch),
+    span = max(epoch) - min(epoch) + 1)
+```
+
+
+```{r}
+net_data_na <- net_data[rowSums(is.na(net_data)) > 0,]
+net_data_na |> 
+  select(result_time) |>
+  distinct()
+```
+
+
+```{r}
+net_data_na_time <- net_data_na |> 
+                      select(result_time) |>
+                      distinct()
+na_result_time <- net_data_na_time$result_time
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
+  group_by(result_time) |>
+  dplyr::summarise(count = n())
+  # dplyr::count(result_time) equivalent
+```
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
+  ggplot(aes(x = result_time)) +
+  geom_bar()
+```
+
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
+  dplyr::count(result_time)
+```
+
+```{r}
+net_data_na |> 
+  select(result_time) |>
+  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
+  ggplot(aes(x = result_time)) +
+  geom_bar()
+```
+
+
+```{r}
+nrow_log_data <- nrow(log_data)
+nrow_net_data <- nrow(net_data)
+log_data <- log_data |> drop_na()
+net_data <- net_data |> drop_na()
+```
+
+
+```{r}
+nrow(loc_data |> 
+        select(ID) |>
+        distinct()) == nrow(loc_data)
+```
+
+
+```{r}
+log_data_loc <- merge(log_data, loc_data, by.x = "nodeid", by.y = "ID")
+```
+
+
+```{r}
+net_data_loc <- merge(net_data, loc_data, by.x = "nodeid", by.y = "ID")
+```
+
+
+```{r}
+log_data_loc |>
+  mutate(abnormal = case_when(humid_temp <= 0 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal)
+```
+
+
+```{r}
+net_data_loc |>
+  mutate(abnormal = case_when(humid_temp >= 40 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal)
+```
+
+
+```{r}
+net_data_loc |>
+  filter(voltage > 2.4) |>
+  arrange(desc(humid_temp))
+```
+
+```{r}
+log_data_loc |>
+  filter(voltage <= 2.4) |>
+  arrange(humidity)
+```
+
+```{r}
+log_data_loc |>
+  filter(voltage <= 2.4, nodeid != 29, nodeid != 198) |>
+  arrange(humidity)
+```
+
+```{r}
+log_data_loc |>
+  filter(voltage <= 2.4) |>
+  distinct(nodeid)
+```
+
+```{r}
+nodeid_log_low_voltage <- log_data_loc |>
+  filter(voltage <= 2.4) |>
+  group_by(nodeid) |>
+  dplyr::summarise(avg_voltage = mean(voltage)) |>
+  top_n(7, wt = -avg_voltage)
+```
+
+
+```{r}
+log_data_loc |>
+  filter(nodeid != 29, nodeid != 198) |>
+  arrange(humidity)
+```
+
+```{r}
+log_data_loc |>
+  filter(nodeid == 198) |>
+  arrange(humidity)
+```
+
+```{r}
+net_data_loc |>
+  filter(voltage <= 2.4) |>
+  arrange(humidity)
+```
+
+```{r}
+net_data_loc |>
+  filter(voltage <= 2.4) |>
+  arrange(desc(humidity))
+```
+
+```{r}
+net_data_loc |>
+  filter(voltage <= 2.4, nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
+  arrange(humidity)
+```
+
+```{r}
+net_data_loc |>
+  filter(voltage <= 2.4, nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
+  arrange(desc(humidity))
+```
+
+```{r}
+net_data_loc |>
+  filter(nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
+  arrange(humidity)
+```
+
+```{r}
+net_data_loc |>
+  filter(nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
+  arrange(desc(humidity))
+```
+
+```{r}
+nodeid_net_low_voltage <- net_data_loc |>
+  filter(voltage <= 2.4) |>
+  distinct(nodeid)
+```
+
+```{r}
+log_data_loc |>
+  filter(voltage <= 2.4) |>
+  arrange(desc(hamatop))
+```
+
+```{r}
+log_data_loc |>
+  filter(nodeid == 198) |>
+  arrange(desc(hamatop))
+```
+
+```{r}
+log_data_loc |>
+  filter(voltage <= 2.4, nodeid != 198, nodeid != 29) |>
+  arrange(desc(hamatop))
+```
+
+```{r}
+log_data_loc |>
+  filter(nodeid != 198, nodeid != 29) |>
+  arrange(desc(hamatop))
+```
+
+```{r}
+nodeid_log_low_voltage <- log_data_loc |>
+  filter(voltage <= 2.4) |>
+  group_by(nodeid) |>
+  dplyr::summarise(avg_voltage = mean(voltage)) |>
+  arrange(avg_voltage) |>
+  top_n(6, wt = -avg_voltage)
+```
+
+
+```{r}
+net_data_loc |>
+  filter(voltage > 2.4, humidity < 110) |>
+  arrange(desc(hamatop))
+```
+
+```{r}
+nodeid_net_hamatop <- net_data_loc |>
+  filter(voltage > 2.4, humidity < 110) |>
+  group_by(nodeid) |>
+  dplyr::summarise(avg_hamatop = mean(hamatop)) |>
+  arrange(desc(avg_hamatop)) |>
+  top_n(4, wt = avg_hamatop)
+```
+
+```{r}
+net_data_loc |>
+  filter(voltage > 2.4, humidity < 110) |>
+  select(nodeid, hamabot) |>
+  arrange(desc(hamabot))
+```
+
+```{r}
+nodeid_net_hamabot <- net_data_loc |>
+  filter(voltage > 2.4, humidity < 110) |>
+  group_by(nodeid) |>
+  dplyr::summarise(avg_hamabot = mean(hamabot)) |>
+  arrange(desc(avg_hamabot)) |>
+  top_n(4, wt = avg_hamabot)
+```
+
+```{r}
+log_data_loc |>
+  filter(nodeid != 29, nodeid != 40, humidity >= -5000) |>
+  select(nodeid, hamabot) |> 
+  arrange(desc(hamabot))
+```
+
+```{r}
+nodeid_log_hamabot <- net_data_loc |>
+  filter(nodeid != 29, nodeid != 40, humidity >= -5000) |>
+  group_by(nodeid) |>
+  dplyr::summarise(avg_hamabot = mean(hamabot)) |>
+  arrange(desc(avg_hamabot)) |>
+  top_n(2, wt = avg_hamabot)
+```
+
+```{r}
+log_data_loc_clean <- log_data_loc |>
+  filter(nodeid != 29, nodeid != 40, nodeid != 128, humidity >= -5000)
+log_data_loc_clean |>
+  select(all_of(variables)) |>
+  summary()
+```
+
+```{r}
+net_data_loc_clean <- net_data_loc |>
+  filter(voltage > 2.4, humidity < 110, humid_temp < 100)
+net_data_loc_clean |>
+  select(all_of(variables)) |>
+  summary()
+```
+
+```{r}
+log_data_loc_clean |>
+  mutate(abnormal = case_when(humidity >= 100 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal) |>
+  filter(abnormal == 1) |>
+  select(nodeid, n) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_log_hum <- log_data_loc_clean |>
+                    mutate(abnormal = case_when(humidity >= 100 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+nodeid_log_hum <- log_data_loc_clean |>
+                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 900, n <= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+net_data_loc_clean |>
+  mutate(abnormal = case_when(humidity >= 100 ~ 1,
+                              TRUE ~ 0)) |>
+  dplyr::count(nodeid, abnormal) |>
+  filter(abnormal == 1) |>
+  select(nodeid, n) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_hum <- net_data_loc_clean |>
+                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 1000) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+net_data_loc_clean |>
+  mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
+                              TRUE ~ 0)) |>
+  group_by(nodeid, Height, abnormal) |>
+  dplyr::summarise(n = n(), .groups = "drop") |>
+  filter(abnormal == 1) |>
+  select(nodeid, n, Height) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_top <- net_data_loc_clean |>
+                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 400) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+nodeid_net_top <- net_data_loc_clean |>
+                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 300, n <= 400) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+nodeid_net_top <- net_data_loc_clean |>
+                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 150, n <= 300) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+net_data_loc_clean |>
+  mutate(abnormal = case_when(hamabot >= 5000 ~ 1,
+                              TRUE ~ 0)) |>
+  group_by(nodeid, Height, abnormal) |>
+  dplyr::summarise(n = n(), .groups = "drop") |>
+  filter(abnormal == 1) |>
+  select(nodeid, n, Height) |>
+  arrange(desc(n))
+```
+
+```{r}
+nodeid_net_bottom <- net_data_loc_clean |>
+                    mutate(abnormal = case_when(hamabot >= 5000 ~ 1,
+                                                TRUE ~ 0)) |>
+                    dplyr::count(nodeid, abnormal) |>
+                    filter(abnormal == 1, n >= 30) |>
+                    select(nodeid) |>
+                    distinct()
+```
+
+```{r}
+net_data_loc <- net_data_loc_clean
+log_data_loc <- log_data_loc_clean
+```
+
+(a)
+
+(b)
+
+(c)
+
+(d)
+
+(e)
+
+# 3. Data Exploration
+
+(a) We decide to present two scatterplots that shows significant linear relationships: \texttt{Reflected PAR} versus \texttt{Incident PAR}, \texttt{Humidity} versus \texttt{Temperature}. The time period chosen is the first week of the data collection process. The reason for this choice of time period is that some nodes are falling apart gradually and that the relationship remains similar across future periods. The plot shows a positive relationship between reflected PAR and incident par. This follows our belief, since both variables are measuring the amount of sunlight. However, as the scatter points indicate, the true relationship between these two variables may not be linear. The plot shows a strong negative relationship between relative humidity and temperature. This is consistent with the observation mentioned in the paper: warm days are dryer and cold days are more humid in the experiment site.
+
+(b) There seems to be a positive linear relationship between Incident PAR and height. This is consistent with our common sense that higher nodes can receive more sunlight. Lower height nodes have significantly less high values for incident PAR. 
+
+(c) We use time series analysis with different height levels to reflect the general trend for temperature, humidity, reflected PAR and incident PAR. We use daily mean to summarize the data. From the figure, we see that the higher the nodes, the more they are related to higher temperatures, incident and reflected PARs. Lower nodes tend to have slightly higher relative humidity.
+
+(d) We include four variables for PCA: \texttt{humidity}, \texttt{reflected PAR}, \texttt{reflected PAR}, \texttt{incident PAR}. From the screeplot, this data can be approximated by low-dimensional representation. According to the rule of elbow and Kaiser's rule, we see that the first two PCs explain 84.6\% of the total variance, so they serve as a good low-dimensional representation.
+
+# 4. Interesting findings
+
+(a) We apply Gaussian mixture model to environmental variables: \texttt{humidity} and \texttt{temperature}. We see that humidity and temperature trends are very similar within one day in May. For sake of convenience, we choose a day in May (May 7th) for observation. The reason for picking this date is we have shown that the trends for temperature versus humidity are similar across different days (May 6th-8th). From the density curve plot, Gaussian mixture model divides the observations into two groups: one with high temperature and low humidity, the other with low temperature and high humidity. To figure out the reason for such division, we create a scatterplot on height versus time. There is no evident height different between these two groups, but there is an obvious cutoff at 8pm, which is the sunset time during May. This shows a logical finding, but indeed interesting: high temperature and low humidity before sunset, and low temperature and high humidity after sunset.
+
+(b) The Guassian mixture model only applies to \texttt{humidity} and \texttt{temperature}, in absence of \texttt{incident PAR} and \texttt{reflected PAR}. By the PCA plot in 3(d), we can apply the first two PC loadings, which contain the most information of the four variables. We use the same date as in 4(a) as our observation and use hierarchical clustering to divide our observations. We first determine a linkage measuring the distance of two clusters from the four metrics: complete linkage, single linkage, average linkage and Ward's distance (see Wikipedia for Ward's method). By looking at the agglomerative coefficient of the four methods, Ward's method has the highest of 0.9972092.  
+
+Then we use gap statistic to choose the number of clusters. From the gap statistic plot, we should choose $K=$.
+
+Last we create some plots to the characteristics of different groups for location-time. In the time-height plot, groups are mainly divided by time. Hierarchical clustering groups the observations into 3 groups with two cutoffs- sunset time and 7 pm. We see the height of group X and X are all above 50 m. This indicates that height is also a factor to distinguish the 4 environmental variables. Typically, when we look at the hamatop-hamabot scatterplot for group X and X, we observe that \texttt{Incident PAR} of group X are all below 20 ppfd while group X doesn't. Group X includes some observations with low temperature and high humidity, but group X doesn't. The \texttt{Incident PAR} of these observations are all between 20 and 40 ppfd, and the \texttt{Reflected PAR} are all zero.
+
+(c) We apply PCA to the four variables with all the observations after scaling. From 3(d), the first two PCs explain the majority of the information. From the PC scores, \texttt{humidity} and \texttt{temperature} are more important for PC1. \texttt{Incident PAR} and \texttt{Reflected PAR} are more important for PC2. From Figure XX, we see \texttt{humidity} and \texttt{temperature} almost have the opposite effect on PC1 and PC2. This is consistent with the fact that \texttt{humidity} and \texttt{temperature} have a negative linear relation, as shown in Part 3.
+
+# 5. Graph Critique
+
+(a) Since there are many zeros and values close to zero in \texttt{Incident PAR} and \texttt{Reflected PAR}, we first add 1 to all the data, and take log for transformation.
+
+(b) From our understanding, the boxplots in figure 3(c) and 3(d) in the paper show the distributions of different variables over height. The paper suggests that spatial gradients might exist over the height of the tree. However, we don't think the boxplots conveying a complete message without observing the temporal readings. We might as well simulate figure 4 presented in the paper to plot trends of the mean values of four environmental variables against height over different time periods during a day, and create several trend plots over different days. We can see the spatial gradients clearly over time: \texttt{humidity} and \texttt{temperature}change across time periods within a day but the trends over height and over days are similar; \texttt{Incident PAR} and \texttt{Reflected PAR} change across time periods within a day but the trends over height and over days are similar.
+
+(c) We choose May Xth as our day for observation. The disadvantages of the first two plots are that there are too many lines in the plot. A way to simplify the plot is to divide the nodes grouped by different height levels and plot the change of \texttt{humidity} over time. We can also simplify the plots for \texttt{temperature}, \texttt{incident PAR} and \texttt{reflected PAR}.
+
+(d) We can concatenate the fourth plots of (a) and (b) respectively and combine the bars with the same height value. This will allow us to see the overlap between \texttt{net-data} and \texttt{log-data}. We can improve the third plots of (a) and (b) respectively by using barplots instead of scatterplots. The second plots of (a) and (b) respectively feature too many boxplots which lack interpretability. A way to enhance interpretability is to partition the days into several groups and create boxplots based on the grouped result. The first plots of (a) and (b) respectively have the worst interpretation: the meaning of the x-axis is very vague to readers.

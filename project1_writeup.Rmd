@@ -82,466 +82,80 @@ colnames(new_date0)[2] = "result_time"
 colnames(new_date0)[3] = "result_days"
 ```
 
-
 ## (a)
 
-First use summary to extract useful insights from summary statistics.
+```{r}
+# standardized result_time by epoch
+log_data <- merge(log_data, new_date0, by = "epoch") |>
+  mutate(result_time = result_time.y) |>
+  select(-result_days, -ends_with(".x"), -ends_with(".y"))
 
+net_data <- merge(net_data, new_date0, by = "epoch") |>
+  mutate(result_time = result_time.y) |>
+  select(-result_days, -ends_with(".x"), -ends_with(".y"))
+```
 
 ```{r}
-# 
+# standardize voltage
 ADC_FS = 1024
 V_ref = 0.6 
-
-net_data |>
-  select(voltage) |>
-  mutate(voltage_battery = V_ref * ADC_FS / voltage) |>
-  summary()
-```
-
-
-```{r}
 net_data <- net_data |>
-              mutate(voltage = V_ref * ADC_FS / voltage)
-```
-
-
-```{r}
-log_data_na <- log_data[rowSums(is.na(log_data)) > 0,]
-log_data_na |> 
-  select(result_time) |>
-  distinct()
-```
-
-
-```{r}
-log_data |>
-  select(result_time) |>
-  distinct()
+  mutate(voltage = V_ref * ADC_FS / voltage)
 ```
 
 ```{r}
-log_data_na |> 
-  select(epoch) |>
-  distinct() |>
-  arrange(epoch)
-```
-
-
-```{r}
-log_data_na |> 
-  select(epoch) |>
-  ggplot(aes(x = epoch)) +
-  geom_bar()
-```
-
-
-```{r}
-log_data_na |> 
-  group_by(nodeid) |>
-  dplyr::summarise(
-    count = n(),
-    start = min(epoch),
-    end = max(epoch),
-    span = max(epoch) - min(epoch) + 1)
-```
-
-
-```{r}
-net_data_na <- net_data[rowSums(is.na(net_data)) > 0,]
-net_data_na |> 
-  select(result_time) |>
-  distinct()
-```
-
-
-```{r}
-net_data_na_time <- net_data_na |> 
-                      select(result_time) |>
-                      distinct()
-na_result_time <- net_data_na_time$result_time
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-net_data_na |> 
-  select(result_time) |>
-  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
-  group_by(result_time) |>
-  dplyr::summarise(count = n())
-  # dplyr::count(result_time) equivalent
-```
-
-```{r}
-net_data_na |> 
-  select(result_time) |>
-  mutate(result_time = as.POSIXct(round(result_time, "hours"))) |>
-  ggplot(aes(x = result_time)) +
-  geom_bar()
-```
-
-
-```{r}
-net_data_na |> 
-  select(result_time) |>
-  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
-  dplyr::count(result_time)
-```
-
-```{r}
-net_data_na |> 
-  select(result_time) |>
-  mutate(result_time = as.POSIXct(round(result_time, "days"))) |>
-  ggplot(aes(x = result_time)) +
-  geom_bar()
-```
-
-
-```{r}
-nrow_log_data <- nrow(log_data)
-nrow_net_data <- nrow(net_data)
+# NA drop
 log_data <- log_data |> drop_na()
 net_data <- net_data |> drop_na()
 ```
 
-
 ```{r}
-nrow(loc_data |> 
-        select(ID) |>
-        distinct()) == nrow(loc_data)
-```
-
-
-```{r}
-log_data_loc <- merge(log_data, loc_data, by.x = "nodeid", by.y = "ID")
-```
-
-
-```{r}
-net_data_loc <- merge(net_data, loc_data, by.x = "nodeid", by.y = "ID")
-```
-
-
-```{r}
-log_data_loc |>
-  mutate(abnormal = case_when(humid_temp <= 0 ~ 1,
-                              TRUE ~ 0)) |>
-  dplyr::count(nodeid, abnormal)
-```
-
-
-```{r}
-net_data_loc |>
-  mutate(abnormal = case_when(humid_temp >= 40 ~ 1,
-                              TRUE ~ 0)) |>
-  dplyr::count(nodeid, abnormal)
-```
-
-
-```{r}
-net_data_loc |>
-  filter(voltage > 2.4) |>
-  arrange(desc(humid_temp))
+# combine log and net data
+outer <- merge(x = net_data, y = log_data, by = c("nodeid", "epoch"), all = T)
+data_all <- outer |> 
+  mutate( humidity = case_when(!is.na(humidity.x) ~ humidity.x,
+                      TRUE ~ humidity.y),
+          humid_temp = case_when(!is.na(humid_temp.x) ~ humid_temp.x,
+                              TRUE ~ humid_temp.y),
+          hamatop = case_when(!is.na(hamatop.x) ~ hamatop.x,
+                              TRUE ~ hamatop.y),
+          hamabot = case_when(!is.na(hamabot.x) ~ hamabot.x,
+                              TRUE ~ hamabot.y),
+          voltage = case_when(!is.na(voltage.x) ~ voltage.x,
+                              TRUE ~ voltage.y),
+          result_time = case_when(!is.na(result_time.x) ~ result_time.x,
+                              TRUE ~ result_time.y),
+          depth = case_when(!is.na(depth.x) ~ depth.x,
+                              TRUE ~ depth.y),
+          parent = case_when(!is.na(parent.x) ~ parent.x,
+                                            TRUE ~ parent.y)) |>
+  select(-ends_with('.x'), -ends_with('.y'))
 ```
 
 ```{r}
-log_data_loc |>
-  filter(voltage <= 2.4) |>
-  arrange(humidity)
+# incorporate location data
+data_all <- merge(data_all, loc_data, by.x = "nodeid", by.y = "ID") |>
+  rename(height = Height,
+         direc = Direc,
+         dist = Dist,
+         tree = Tree)
 ```
 
 ```{r}
-log_data_loc |>
-  filter(voltage <= 2.4, nodeid != 29, nodeid != 198) |>
-  arrange(humidity)
-```
+# outlier removal, fast version
+data <- data_all |>
+  filter(voltage > 2.4, voltage < 3, humid_temp < 100, humidity < 110, nodeid != 40)
 
-```{r}
-log_data_loc |>
-  filter(voltage <= 2.4) |>
-  distinct(nodeid)
-```
+data <- data |>
+  mutate(date = date(result_time)) |>
+  filter(nodeid != 3 | date != "2004-05-10", nodeid != 59 | date != "2004-05-19", nodeid != 27 | date != "2004-04-28",
+         nodeid != 78 | date != "2004-05-08", nodeid != 140, date != "2004-05-08", nodeid != 68 | date != "2004-05-06",
+         nodeid != 198 | date != "2004-05-10", nodeid != 16 | date != "2004-05-05",
+         nodeid != 136 | date != "2004-05-06", nodeid != 65 | date != "2004-05-06")
 
-```{r}
-nodeid_log_low_voltage <- log_data_loc |>
-  filter(voltage <= 2.4) |>
-  group_by(nodeid) |>
-  dplyr::summarise(avg_voltage = mean(voltage)) |>
-  top_n(7, wt = -avg_voltage)
-```
-
-
-```{r}
-log_data_loc |>
-  filter(nodeid != 29, nodeid != 198) |>
-  arrange(humidity)
-```
-
-```{r}
-log_data_loc |>
-  filter(nodeid == 198) |>
-  arrange(humidity)
-```
-
-```{r}
-net_data_loc |>
-  filter(voltage <= 2.4) |>
-  arrange(humidity)
-```
-
-```{r}
-net_data_loc |>
-  filter(voltage <= 2.4) |>
-  arrange(desc(humidity))
-```
-
-```{r}
-net_data_loc |>
-  filter(voltage <= 2.4, nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
-  arrange(humidity)
-```
-
-```{r}
-net_data_loc |>
-  filter(voltage <= 2.4, nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
-  arrange(desc(humidity))
-```
-
-```{r}
-net_data_loc |>
-  filter(nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
-  arrange(humidity)
-```
-
-```{r}
-net_data_loc |>
-  filter(nodeid != 78, nodeid != 141, nodeid != 123, nodeid != 145, nodeid != 3) |>
-  arrange(desc(humidity))
-```
-
-```{r}
-nodeid_net_low_voltage <- net_data_loc |>
-  filter(voltage <= 2.4) |>
-  distinct(nodeid)
-```
-
-```{r}
-log_data_loc |>
-  filter(voltage <= 2.4) |>
-  arrange(desc(hamatop))
-```
-
-```{r}
-log_data_loc |>
-  filter(nodeid == 198) |>
-  arrange(desc(hamatop))
-```
-
-```{r}
-log_data_loc |>
-  filter(voltage <= 2.4, nodeid != 198, nodeid != 29) |>
-  arrange(desc(hamatop))
-```
-
-```{r}
-log_data_loc |>
-  filter(nodeid != 198, nodeid != 29) |>
-  arrange(desc(hamatop))
-```
-
-```{r}
-nodeid_log_low_voltage <- log_data_loc |>
-  filter(voltage <= 2.4) |>
-  group_by(nodeid) |>
-  dplyr::summarise(avg_voltage = mean(voltage)) |>
-  arrange(avg_voltage) |>
-  top_n(6, wt = -avg_voltage)
-```
-
-
-```{r}
-net_data_loc |>
-  filter(voltage > 2.4, humidity < 110) |>
-  arrange(desc(hamatop))
-```
-
-```{r}
-nodeid_net_hamatop <- net_data_loc |>
-  filter(voltage > 2.4, humidity < 110) |>
-  group_by(nodeid) |>
-  dplyr::summarise(avg_hamatop = mean(hamatop)) |>
-  arrange(desc(avg_hamatop)) |>
-  top_n(4, wt = avg_hamatop)
-```
-
-```{r}
-net_data_loc |>
-  filter(voltage > 2.4, humidity < 110) |>
-  select(nodeid, hamabot) |>
-  arrange(desc(hamabot))
-```
-
-```{r}
-nodeid_net_hamabot <- net_data_loc |>
-  filter(voltage > 2.4, humidity < 110) |>
-  group_by(nodeid) |>
-  dplyr::summarise(avg_hamabot = mean(hamabot)) |>
-  arrange(desc(avg_hamabot)) |>
-  top_n(4, wt = avg_hamabot)
-```
-
-```{r}
-log_data_loc |>
-  filter(nodeid != 29, nodeid != 40, humidity >= -5000) |>
-  select(nodeid, hamabot) |> 
-  arrange(desc(hamabot))
-```
-
-```{r}
-nodeid_log_hamabot <- net_data_loc |>
-  filter(nodeid != 29, nodeid != 40, humidity >= -5000) |>
-  group_by(nodeid) |>
-  dplyr::summarise(avg_hamabot = mean(hamabot)) |>
-  arrange(desc(avg_hamabot)) |>
-  top_n(2, wt = avg_hamabot)
-```
-
-```{r}
-log_data_loc_clean <- log_data_loc |>
-  filter(nodeid != 29, nodeid != 40, nodeid != 128, humidity >= -5000)
-log_data_loc_clean |>
-  select(all_of(variables)) |>
-  summary()
-```
-
-```{r}
-net_data_loc_clean <- net_data_loc |>
-  filter(voltage > 2.4, humidity < 110, humid_temp < 100)
-net_data_loc_clean |>
-  select(all_of(variables)) |>
-  summary()
-```
-
-```{r}
-log_data_loc_clean |>
-  mutate(abnormal = case_when(humidity >= 100 ~ 1,
-                              TRUE ~ 0)) |>
-  dplyr::count(nodeid, abnormal) |>
-  filter(abnormal == 1) |>
-  select(nodeid, n) |>
-  arrange(desc(n))
-```
-
-```{r}
-nodeid_log_hum <- log_data_loc_clean |>
-                    mutate(abnormal = case_when(humidity >= 100 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 1000) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-nodeid_log_hum <- log_data_loc_clean |>
-                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 900, n <= 1000) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-net_data_loc_clean |>
-  mutate(abnormal = case_when(humidity >= 100 ~ 1,
-                              TRUE ~ 0)) |>
-  dplyr::count(nodeid, abnormal) |>
-  filter(abnormal == 1) |>
-  select(nodeid, n) |>
-  arrange(desc(n))
-```
-
-```{r}
-nodeid_net_hum <- net_data_loc_clean |>
-                    mutate(abnormal = case_when(humidity >= 100 | humidity <= 0 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 1000) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-net_data_loc_clean |>
-  mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
-                              TRUE ~ 0)) |>
-  group_by(nodeid, Height, abnormal) |>
-  dplyr::summarise(n = n(), .groups = "drop") |>
-  filter(abnormal == 1) |>
-  select(nodeid, n, Height) |>
-  arrange(desc(n))
-```
-
-```{r}
-nodeid_net_top <- net_data_loc_clean |>
-                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 400) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-nodeid_net_top <- net_data_loc_clean |>
-                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 300, n <= 400) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-nodeid_net_top <- net_data_loc_clean |>
-                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 150, n <= 300) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-net_data_loc_clean |>
-  mutate(abnormal = case_when(hamabot >= 5000 ~ 1,
-                              TRUE ~ 0)) |>
-  group_by(nodeid, Height, abnormal) |>
-  dplyr::summarise(n = n(), .groups = "drop") |>
-  filter(abnormal == 1) |>
-  select(nodeid, n, Height) |>
-  arrange(desc(n))
-```
-
-```{r}
-nodeid_net_bottom <- net_data_loc_clean |>
-                    mutate(abnormal = case_when(hamabot >= 5000 ~ 1,
-                                                TRUE ~ 0)) |>
-                    dplyr::count(nodeid, abnormal) |>
-                    filter(abnormal == 1, n >= 30) |>
-                    select(nodeid) |>
-                    distinct()
-```
-
-```{r}
-net_data_loc <- net_data_loc_clean
-log_data_loc <- log_data_loc_clean
+data <- data |>
+  mutate(date = date(result_time)) |>
+  filter(nodeid != 122 | date != "2004-05-07", nodeid != 15 | date != "2004-04-30")
 ```
 
 (a)
@@ -555,6 +169,26 @@ log_data_loc <- log_data_loc_clean
 (e)
 
 # 3. Data Exploration
+
+```{r}
+data |>
+  mutate(day = as.POSIXct(round(result_time, "days"))) |>
+  dplyr::count(day) |>
+  arrange(day) |>
+  ggplot(aes(x = day, y = n)) +
+  geom_point() +
+  geom_vline(xintercept = as.numeric(as.POSIXct(c("2004-05-26")))) +
+  labs(x = "Day", y = "Count of data points per day") +
+  annotate("text", x = as.POSIXct(c("2004-05-31")), y = 10000,
+           label = "May 26", size = 4) +
+  theme_bw()
+```
+
+```{r}
+data <- data |>
+  filter(result_time < as.POSIXct("2004-05-27"))
+```
+
 
 (a) We decide to present two scatterplots that shows significant linear relationships: \texttt{Reflected PAR} versus \texttt{Incident PAR}, \texttt{Humidity} versus \texttt{Temperature}. The time period chosen is the first week of the data collection process. The reason for this choice of time period is that some nodes are falling apart gradually and that the relationship remains similar across future periods. The plot shows a positive relationship between reflected PAR and incident par. This follows our belief, since both variables are measuring the amount of sunlight. However, as the scatter points indicate, the true relationship between these two variables may not be linear. The plot shows a strong negative relationship between relative humidity and temperature. This is consistent with the observation mentioned in the paper: warm days are dryer and cold days are more humid in the experiment site.
 

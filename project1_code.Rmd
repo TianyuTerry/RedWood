@@ -283,7 +283,7 @@ nrow(loc_data |>
 286700/292786 rows remain after joining for log data.
 
 ```{r}
-log_data_loc <- merge(log_data, loc_data, by.x="nodeid", by.y="ID")
+log_data_loc <- merge(log_data, loc_data, by.x = "nodeid", by.y = "ID")
 nrow(log_data)
 nrow(log_data_loc)
 ```
@@ -291,7 +291,7 @@ nrow(log_data_loc)
 110433/110718 rows remain after joining for net data.
 
 ```{r}
-net_data_loc <- merge(net_data, loc_data, by.x="nodeid", by.y="ID")
+net_data_loc <- merge(net_data, loc_data, by.x = "nodeid", by.y = "ID")
 nrow(net_data)
 nrow(net_data_loc)
 ```
@@ -1194,16 +1194,6 @@ log_data_loc <- log_data_loc_clean
 
 ## Part 3: Data Exploration
 
-```{r}
-# net_data_loc <- net_data_loc %>%
-  # rename(reflected = hamabot, incident = hamatop)
-head(net_data_loc, 10)
-```
-
-```{r}
-head(log_data_loc, 10)
-```
-
 (a)
 
 ```{r}
@@ -1222,7 +1212,7 @@ log_data_loc |>
 ```{r}
 outer <- merge(x = net_data_loc, y = log_data_loc, by = c("nodeid", "epoch"), all = T)
 data_all <- outer |> 
-                mutate( humidty = case_when(!is.na(humidity.x) ~ humidity.x,
+                mutate( humidity = case_when(!is.na(humidity.x) ~ humidity.x,
                                     TRUE ~ humidity.y),
                         humid_temp = case_when(!is.na(humid_temp.x) ~ humid_temp.x,
                                             TRUE ~ humid_temp.y),
@@ -1238,20 +1228,20 @@ data_all <- outer |>
                                             TRUE ~ depth.y),
                         parent = case_when(!is.na(parent.x) ~ parent.x,
                                             TRUE ~ parent.y),
-                        height = Height.x,
-                        direc = Direc.x,
-                        dist = Dist.x,
-                        tree = Tree.x) |>
+                        height = case_when(!is.na(Height.x) ~ Height.x,
+                                            TRUE ~ Height.y),
+                        direc = case_when(!is.na(Direc.x) ~ Direc.x,
+                                            TRUE ~ Direc.y),
+                        dist = case_when(!is.na(Dist.x) ~ Dist.x,
+                                            TRUE ~ Dist.y),
+                        tree = case_when(!is.na(Tree.x) ~ Tree.x,
+                                            TRUE ~ Tree.y)) |>
                 select(-ends_with('.x'), -ends_with('.y'))
 ```
 
 ```{r}
 nrow(outer)
 nrow(data_all)
-```
-
-```{r}
-colnames(data_all)
 ```
 
 ```{r}
@@ -1263,43 +1253,27 @@ data_all |>
   geom_point() +
   geom_vline(xintercept = as.numeric(as.POSIXct(c("2004-05-26")))) +
   labs(x = "Day", y = "Count of data points per day") +
+  annotate("text", x = as.POSIXct(c("2004-05-31")), y = 10000,
+           label = "May 26", size = 4) +
   theme_minimal()
 ```
 
 ```{r}
-intersect <- inner_join(net_data_loc, log_data_loc, by = c("nodeid", "epoch"))
-intersect <- select(intersect, -16:-28)
-# pick time period
-intersect$result_time.x <- as.POSIXct(strptime(intersect$result_time.x, 
-                                               format = "%A %b %d %H:%M:%S %Y"))
-intersect %>%
-  select(nodeid, result_time.x, Height.x) %>%
-  ggplot() +
-  geom_point(aes(x = result_time.x, y = as.factor(nodeid), color = Height.x), size = 0.1) +
-  labs(x = "Days", y = "nodeid") +
-  geom_vline(xintercept = as.numeric(as.POSIXct(c("2004/05/07 11:25:00","2004/05/26 9:00:00")))) +
-  annotate("text", x = as.POSIXct("2004/05/24 23:00:00"), y = 3, 
-           label = "9:00 am, May 26", size = 4) +
-  annotate("text", x = as.POSIXct("2005/05/09 9:00:00"), y = 3,
-           label = "11:25 am, May 7", size = 4)
+data <- data_all |>
+  filter(result_time < as.POSIXct("2004-05-27"))
+nrow(data)
 ```
 
 ```{r}
-library(GGally)
-ggpairs(select(net_data_loc, humidity, humid_temp, hamatop, hamabot, Height))
-```
-
-```{r}
-fig1 <- net_data_loc %>%
-  filter(as.POSIXct(result_time) < '2004-05-15') %>%
+fig1 <- data %>%
+  filter(hamabot > 0, hamatop > 0) %>%
   ggplot(aes(x = hamatop, y = hamabot)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
   labs(title = "", x = "Incident PAR", y = "Reflected PAR") +
   theme_bw()
 
-fig2 <- net_data_loc %>%
-  filter(as.POSIXct(result_time) < '2004-05-15') %>%
+fig2 <- data %>%
   ggplot(aes(x = humid_temp, y = humidity)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
@@ -1310,14 +1284,35 @@ grid.arrange(fig1, fig2, ncol = 2)
 ```
 
 ```{r}
-fig3 <- net_data_loc %>%
-  filter(as.POSIXct(result_time) < '2004-06-03') %>%
-  ggplot(aes(x = hamatop, y = Height)) +
-  geom_point() +
+fig3 <- data %>%
+  ggplot(aes(x = hamatop, y = height)) +
+  geom_point(na.rm = T) +
   geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
   labs(title = "", x = "Incident PAR", y = "Node Height") +
   theme_bw()
-grid.arrange(fig3, ncol = 1)
+
+fig4 <- data %>%
+  ggplot(aes(x = hamatop, y = humid_temp)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Temperature") +
+  theme_bw()
+
+fig5 <- data %>%
+  ggplot(aes(x = hamatop, y = hamabot)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Reflected PAR") +
+  theme_bw()
+
+fig6 <- data %>%
+  ggplot(aes(x = hamatop, y = humidity)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Humidity") +
+  theme_bw()
+
+grid.arrange(fig3, fig4, fig5, fig6, nrow = 2, ncol = 2)
 ```
 
 (c)
@@ -1325,46 +1320,86 @@ grid.arrange(fig3, ncol = 1)
 ```{r fig.width=15, fig.height=8}
 library(lubridate)
 
-temp_plot <- net_data_loc %>%
-  filter(date(result_time) < '2004-06-02') %>%
-  group_by(date = date(result_time), Height) %>%
+temp_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
   dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = humid_temp, color = Height, group = Height)) +
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
   geom_line() +
-  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
   labs(title = "Temperature", x = "", y = "", color = "Node Height") +
   theme_bw()
 
-humidity_plot <- net_data_loc %>%
-  filter(date(result_time) < '2004-06-02') %>%
-  group_by(date = date(result_time), Height) %>%
+humidity_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
   dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = humidity, color = Height, group = Height)) +
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
   geom_line() +
-  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
   labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
   theme_bw()
 
-incident_plot <- net_data_loc %>%
-  filter(date(result_time) < '2004-06-02') %>%
-  group_by(date = date(result_time), Height) %>%
+incident_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
   dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = hamatop, color = Height, group = Height)) +
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
   geom_line() +
-  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
   labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
   theme_bw()
 
-reflected_plot <- net_data_loc %>%
-  filter(date(result_time) < '2004-06-02') %>%
-  group_by(date = date(result_time), Height) %>%
+reflected_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
   dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
-  ggplot(aes(x = date, y = hamabot, color = Height, group = Height)) +
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
   geom_line() +
-  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-05-07"), as_date("2004-06-02")), expand = c(0,0), date_labels = "%B %d") +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r}
+temp_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
   scale_color_gradient(low = "orange", high = "blue") +
   labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
   theme_bw()
@@ -1377,36 +1412,69 @@ grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, 
 PCA
 
 ```{r}
-pca <- net_data_loc %>%
+pca <- data %>%
   select(humidity, humid_temp, hamatop, hamabot) %>% 
   prcomp(center = TRUE, scale = TRUE)
 # screeplot
-pca$sdev^2 %>%
-  data.frame(PC = c(1:4), Eigenvalue = .) %>%
-  ggplot(., aes(x = PC, y = Eigenvalue)) +
-  geom_point() +
-  geom_line()
+eigenvalues <- pca$sdev^2
+eigs_cum <- cumsum(eigenvalues) /sum(eigenvalues)
+ggplot() + 
+  geom_point(aes(x = 1:length(eigenvalues), y = eigs_cum)) + 
+  geom_line(aes(x = 1:length(eigenvalues), y = eigs_cum)) +
+  labs(x = "first PCs", y = "fraction of total variance explained")
 ```
 
 ## Part 4: Interesting findings
 
 ```{r}
 # KMeans
-height <- net_data_loc %>%
-  group_by(Height) %>%
+height <- data %>%
+  group_by(height) %>%
   summarise(across(c(humidity, humid_temp), mean))
 
 set.seed(2022)
 cluster <- height %>%
-  select(-Height) %>%
+  select(-height) %>%
   kmeans(centers = 2, nstart = 10)
 
 height %>%
   mutate(cluster = factor(cluster$cluster)) %>%
-  ggplot(aes(x = Height, fill = cluster, group = cluster)) +
+  ggplot(aes(x = height, fill = cluster, group = cluster)) +
   geom_density(alpha = 0.7, color = FALSE) +
   labs(title = "", x = "Height (m)", y = "", fill = "Cluster") +
   scale_fill_viridis_d() +
+  theme_bw()
+```
+```{r}
+# KMeans
+height <- data %>%
+  group_by(height) %>%
+  summarise(across(c(hamatop, hamabot), mean))
+
+set.seed(2022)
+cluster <- height %>%
+  select(-height) %>%
+  kmeans(centers = 2, nstart = 10)
+
+height %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = height, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "", x = "Height (m)", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+```
+
+```{r}
+data %>%
+  mutate(hour = hour(result_time),
+         date = date(result_time)) %>%
+  filter(date == "2004-05-06" | date == "2004-05-07" | date == "2004-05-08") %>%
+  mutate(date = as.factor(date)) %>%
+  ggplot(aes(x = humid_temp, y = humidity, color = date)) +
+  geom_point(na.rm = T) +
+  # geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Temperature", y = "Humidity") +
   theme_bw()
 ```
 
@@ -1414,7 +1482,7 @@ height %>%
 ```{r}
 # GMM
 library(mixtools)
-df <- net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07",]
+df <- data[as_date(data$result_time) == "2004-05-07",]
 em <- mvnormalmixEM(df[, c("humidity", "humid_temp")])
 plot(em, whichplots = 2)
 ```
@@ -1426,11 +1494,12 @@ df %>%
   geom_point(aes(x = humidity, y = humid_temp, group = gmm_group_1, color = gmm_group_1))
 df %>%
   ggplot() +
-  geom_point(aes(x = Height, y = result_time, group = gmm_group_1, color = gmm_group_1))
+  geom_point(aes(x = height, y = result_time, group = gmm_group_1, color = gmm_group_1))
 ```
 
 ```{r}
 # PCA
+library(ggfortify)
 pca
 autoplot(pca, col = "hamabot", label = FALSE, loadings.label = TRUE) +
   theme_classic()
@@ -1439,10 +1508,12 @@ autoplot(pca, col = "hamabot", label = FALSE, loadings.label = TRUE) +
 ```{r}
 # HC
 library(cluster)
-net_data_loc = cbind(net_data_loc, data.matrix(pca$x)[, c(1, 2)])
-df1 <- net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07", c("PC1", "PC2")]
+data = cbind(data, data.matrix(pca$x)[, c(1, 2)])
+df1 <- data[as_date(data$result_time) == "2004-05-07", c("PC1", "PC2")]
 m <- c("average", "single", "complete", "ward")
 names(m) <- c("average", "single", "complete", "ward")
+m <- c("average")
+names(m) <- c("average")
 agg_coeff <- function(x){
   agnes(df1, method = x)$ac
 }
@@ -1480,3 +1551,8 @@ df1[df1$agnes_group == 4 & df1$humid_temp < 11 & df1$humidity > 95, ]$hamatop
 unique(df1[df1$agnes_group == 4, ]$Direc)
 unique(df1[df1$agnes_group == 5, ]$Direc)
 ```
+
+## Part 5
+
+
+

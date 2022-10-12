@@ -116,7 +116,7 @@ data |>
   labs(x = "Day", y = "Count of data points per day") +
   annotate("text", x = as.POSIXct(c("2004-05-31")), y = 10000,
            label = "May 26", size = 4) +
-  theme_minimal()
+  theme_bw()
 ```
 
 ```{r}

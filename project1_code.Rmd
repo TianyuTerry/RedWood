@@ -1620,11 +1620,25 @@ unique(df1[df1$agnes_group == 5, ]$Direc)
 ## Part 5 Graph Critique
 
 (a)
+
 ```{r}
-log_variable <- log(1 + select(data, hamatop, hamabot))
-hist(log_variable$hamatop, xlab = "mol/m2/s", ylab = "counts", main = "Incident PAR")
-hist(log_variable$hamabot, xlab = "mol/m2/2", ylab = "counts", main = "Reflected PAR")
+plot1 <- data %>% 
+  filter(hamatop > 0) %>%
+  mutate(hamatop = log(hamatop)) %>%
+  ggplot() +
+  geom_histogram(aes(x = hamatop), bins = 40) +
+  labs(x = "mol/m2/s", y = "counts", title = "Incident PAR")
+
+plot2 <- data %>% 
+  filter(hamabot > 0) %>%
+  mutate(hamabot = log(hamabot)) %>%
+  ggplot() +
+  geom_histogram(aes(x = hamabot), bins = 40) +
+  labs(x = "mol/m2/2", y = "counts", title = "Reflected PAR")
+
+grid.arrange(plot1, plot2, ncol = 2)
 ```
+
 
 (b)
 ```{r}

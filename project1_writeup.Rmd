@@ -5,15 +5,8 @@ author:
 - Tianyu Wu
 date: "2022/10/13"
 output:
-  pdf_document:
-    toc: yes
-  bookdown::pdf_document2:
-    toc: yes
-header-includes:
-- \usepackage{caption}
-- \usepackage{float}
-- \floatplacement{figure}{H}
-fontsize: 12pt
+  pdf_document
+fontsize: 10pt
 ---
 
 ```{r setup, include=FALSE}
@@ -82,7 +75,7 @@ colnames(new_date0)[2] = "result_time"
 colnames(new_date0)[3] = "result_days"
 ```
 
-## (a)
+(a)
 
 ```{r}
 # standardized result_time by epoch
@@ -170,7 +163,7 @@ data <- data |>
 
 # 3. Data Exploration
 
-```{r}
+```{r fig.cap="Choose a specific date" ,fig.width=5, fig.height=3}
 data |>
   mutate(day = as.POSIXct(round(result_time, "days"))) |>
   dplyr::count(day) |>
@@ -192,15 +185,202 @@ data <- data |>
 
 (a) We decide to present two scatterplots that shows significant linear relationships: \texttt{Reflected PAR} versus \texttt{Incident PAR}, \texttt{Humidity} versus \texttt{Temperature}. The time period chosen is the first week of the data collection process. The reason for this choice of time period is that some nodes are falling apart gradually and that the relationship remains similar across future periods. The plot shows a positive relationship between reflected PAR and incident par. This follows our belief, since both variables are measuring the amount of sunlight. However, as the scatter points indicate, the true relationship between these two variables may not be linear. The plot shows a strong negative relationship between relative humidity and temperature. This is consistent with the observation mentioned in the paper: warm days are dryer and cold days are more humid in the experiment site.
 
+```{r fig.cap="Scatterplots: Inflected vs Reflected PAR, Temperature vs Humidity", fig.width=8, fig.height=3}
+fig1 <- data %>%
+  filter(hamabot > 0, hamatop > 0) %>%
+  ggplot(aes(x = hamatop, y = hamabot)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Reflected PAR") +
+  theme_bw()
+
+fig2 <- data %>%
+  ggplot(aes(x = humid_temp, y = humidity)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Temperature", y = "Relative Humidity") +
+  theme_bw()
+
+grid.arrange(fig1, fig2, ncol = 2)
+```
+
 (b) There seems to be a positive linear relationship between Incident PAR and height. This is consistent with our common sense that higher nodes can receive more sunlight. Lower height nodes have significantly less high values for incident PAR. 
+
+```{r fig.cap="Other scatterplots", fig.width=8, fig.height=3}
+fig3 <- data %>%
+  ggplot(aes(x = hamatop, y = height)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Node Height") +
+  theme_bw()
+
+fig4 <- data %>%
+  ggplot(aes(x = hamatop, y = humid_temp)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Temperature") +
+  theme_bw()
+
+fig5 <- data %>%
+  ggplot(aes(x = hamatop, y = hamabot)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Reflected PAR") +
+  theme_bw()
+
+fig6 <- data %>%
+  ggplot(aes(x = hamatop, y = humidity)) +
+  geom_point(na.rm = T) +
+  geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Incident PAR", y = "Humidity") +
+  theme_bw()
+
+grid.arrange(fig3, fig4, fig5, fig6, nrow = 2, ncol = 2)
+```
 
 (c) We use time series analysis with different height levels to reflect the general trend for temperature, humidity, reflected PAR and incident PAR. We use daily mean to summarize the data. From the figure, we see that the higher the nodes, the more they are related to higher temperatures, incident and reflected PARs. Lower nodes tend to have slightly higher relative humidity.
 
+```{r fig.cap="Time series plots for the four environmental variables", fig.width=15, fig.height=5}
+library(lubridate)
+
+temp_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r fig.cap="Trend of the four environmental variables against height", fig.width=15, fig.height=8}
+temp_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
 (d) We include four variables for PCA: \texttt{humidity}, \texttt{reflected PAR}, \texttt{reflected PAR}, \texttt{incident PAR}. From the screeplot, this data can be approximated by low-dimensional representation. According to the rule of elbow and Kaiser's rule, we see that the first two PCs explain 84.6\% of the total variance, so they serve as a good low-dimensional representation.
+
+```{r fig.cap="Screeplot", fig.width=5, fig.height=3}
+pca <- data %>%
+  select(humidity, humid_temp, hamatop, hamabot) %>% 
+  prcomp(center = TRUE, scale = TRUE)
+# screeplot
+eigenvalues <- pca$sdev^2
+eigs_cum <- cumsum(eigenvalues) /sum(eigenvalues)
+ggplot() + 
+  geom_point(aes(x = 1:length(eigenvalues), y = eigs_cum)) + 
+  geom_line(aes(x = 1:length(eigenvalues), y = eigs_cum)) +
+  labs(x = "first PCs", y = "fraction of total variance explained") +
+  theme_bw()
+```
 
 # 4. Interesting findings
 
+```{r fig.cap="There is similar relations for temperature versus humidity", fig.height=3, fig.width=5}
+# Show that the trend for temperature versus humidity is similar across chocices we choose
+data %>%
+  mutate(hour = hour(result_time),
+         date = date(result_time)) %>%
+  filter(date == "2004-05-06" | date == "2004-05-07" | date == "2004-05-08") %>%
+  mutate(date = as.factor(date)) %>%
+  ggplot(aes(x = humid_temp, y = humidity, color = date)) +
+  geom_point(na.rm = T) +
+  # geom_smooth(formula = y ~ x, method = "lm", se = FALSE) +
+  labs(title = "", x = "Temperature", y = "Humidity") +
+  theme_bw()
+```
+
 (a) We apply Gaussian mixture model to environmental variables: \texttt{humidity} and \texttt{temperature}. We see that humidity and temperature trends are very similar within one day in May. For sake of convenience, we choose a day in May (May 7th) for observation. The reason for picking this date is we have shown that the trends for temperature versus humidity are similar across different days (May 6th-8th). From the density curve plot, Gaussian mixture model divides the observations into two groups: one with high temperature and low humidity, the other with low temperature and high humidity. To figure out the reason for such division, we create a scatterplot on height versus time. There is no evident height different between these two groups, but there is an obvious cutoff at 8pm, which is the sunset time during May. This shows a logical finding, but indeed interesting: high temperature and low humidity before sunset, and low temperature and high humidity after sunset.
+
+```{r fig.cap="Gaussian Mixture Model", fig.width=5, fig.height=3}
+# GMM
+library(mixtools)
+df <- data[as_date(data$result_time) == "2004-05-07",]
+em <- mvnormalmixEM(df[, c("humidity", "humid_temp")])
+plot(em, whichplots = 2)
+```
+
+```{r fig.cap="GMM grouping result", fig.width=5, fig.height=3}
+df$gmm_group_1 <- em$posterior[, 1] > 0.5 # T for group 1, F for group 2
+df %>%
+  ggplot() +
+  geom_point(aes(x = humidity, y = humid_temp, group = gmm_group_1, color = gmm_group_1))
+df %>%
+  ggplot() +
+  geom_point(aes(x = height, y = result_time, group = gmm_group_1, color = gmm_group_1))
+```
 
 (b) The Guassian mixture model only applies to \texttt{humidity} and \texttt{temperature}, in absence of \texttt{incident PAR} and \texttt{reflected PAR}. By the PCA plot in 3(d), we can apply the first two PC loadings, which contain the most information of the four variables. We use the same date as in 4(a) as our observation and use hierarchical clustering to divide our observations. We first determine a linkage measuring the distance of two clusters from the four metrics: complete linkage, single linkage, average linkage and Ward's distance (see Wikipedia for Ward's method). By looking at the agglomerative coefficient of the four methods, Ward's method has the highest of 0.9972092.  
 
@@ -208,14 +388,346 @@ Then we use gap statistic to choose the number of clusters. From the gap statist
 
 Last we create some plots to the characteristics of different groups for location-time. In the time-height plot, groups are mainly divided by time. Hierarchical clustering groups the observations into 3 groups with two cutoffs- sunset time and 7 pm. We see the height of group X and X are all above 50 m. This indicates that height is also a factor to distinguish the 4 environmental variables. Typically, when we look at the hamatop-hamabot scatterplot for group X and X, we observe that \texttt{Incident PAR} of group X are all below 20 ppfd while group X doesn't. Group X includes some observations with low temperature and high humidity, but group X doesn't. The \texttt{Incident PAR} of these observations are all between 20 and 40 ppfd, and the \texttt{Reflected PAR} are all zero.
 
+```{r fig.cap="Hierarchical clustering; Gap statistics plot", fig.height=8, fig.width=15}
+library(cluster)
+data = cbind(data, data.matrix(pca$x)[, c(1, 2)])
+df1 <- data[as_date(data$result_time) == "2004-05-07", c("PC1", "PC2")]
+m <- c("average", "single", "complete", "ward")
+names(m) <- c("average", "single", "complete", "ward")
+agg_coeff <- function(x){
+  agnes(df1, method = x)$ac
+}
+cluster <- df1 %>%
+  agnes(method = "ward")
+pltree(cluster, cex = 0.6, hang = -1, main = "Dendogram") # plot the tree
+# apply gap statistic to compare total intra-cluster variation
+library(factoextra)
+gap_stat <- clusGap(df1, FUN = hcut, nstart = 25, K.max = 10, B = 50)
+# choose k with the highest gap statistic
+fviz_gap_stat(gap_stat)
+final_clust <- hclust(dist(df1, method = "euclidean"), method = "ward.D2")
+agnes_group <- cutree(final_clust, k = 5)
+df1 <- data.frame(cbind(net_data_loc[as_date(net_data_loc$result_time) == "2004-05-07", ], agnes_group = as.factor(agnes_group)))
+df1 %>% 
+  ggplot() +
+  geom_point(aes(result_time, Height, group = agnes_group, color = agnes_group), alpha = 0.5)
+df1[df1$agnes_group == 4|df1$agnes_group == 5, ] %>%
+  ggplot() +
+  geom_point(aes(humid_temp, humidity, group = agnes_group, color = agnes_group), alpha = 0.5)
+```
+
 (c) We apply PCA to the four variables with all the observations after scaling. From 3(d), the first two PCs explain the majority of the information. From the PC scores, \texttt{humidity} and \texttt{temperature} are more important for PC1. \texttt{Incident PAR} and \texttt{Reflected PAR} are more important for PC2. From Figure XX, we see \texttt{humidity} and \texttt{temperature} almost have the opposite effect on PC1 and PC2. This is consistent with the fact that \texttt{humidity} and \texttt{temperature} have a negative linear relation, as shown in Part 3.
+
+```{r fig.cap="PCA", fig.width=5, fig.height=3}
+# PCA
+library(ggfortify)
+autoplot(pca, col = "hamabot", label = FALSE, loadings.label = TRUE) +
+  theme_classic()
+```
+
+(d) By KMeans clustering, \texttt{humidity} and \texttt{temperature} have inherent relations to the height of nodes. We compute the averages of \texttt{temperature} and \texttt{humidity} by height. Then we start clustering with two centroids and then look at the distribution of height by cluster. The distributions show differences in height, so there are inherent relations in between. The same reasoning applies for \texttt{reflected PAR} and \texttt{incident PAR}, as well as these pairs against the time of recording.
+
+```{r fig.cap="KMeans against height", fig.width=8, fig.height=3}
+# KMeans for humidity annd temp against height
+height <- data %>%
+  group_by(height) %>%
+  summarise(across(c(humidity, humid_temp), mean))
+
+set.seed(2022)
+cluster <- height %>%
+  select(-height) %>%
+  kmeans(centers = 2, nstart = 10)
+
+height1 <-height %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = height, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "KMeans for Humidity versus Temperature", x = "Height (m)", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+# KMeans for hamatop and hamabot against height
+height <- data %>%
+  group_by(height) %>%
+  summarise(across(c(hamatop, hamabot), mean))
+
+set.seed(2022)
+cluster <- height %>%
+  select(-height) %>%
+  kmeans(centers = 2, nstart = 10)
+
+height2 <- height %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = height, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "KMeans for Incident versus Reflected PAR", x = "Height (m)", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+grid.arrange(height1, height2, nrow = 1, ncol = 2)
+```
+
+```{r fig.cap="KMeans against time", fig.width=8, fig.height=3}
+library(lubridate)
+hour <- data %>%
+  mutate(hour = hour(result_time)) %>%
+  group_by(hour) %>%
+  summarise(across(c(humidity, humid_temp), mean))
+
+set.seed(2022)
+cluster <- hour %>%
+  select(-hour) %>%
+  kmeans(centers = 2, nstart = 10)
+
+hour1 <- hour %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = hour, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "KMeans for Humidity versus Temperature", x = "Hour", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+# KMeans for hamatop and hamabot against hour
+hour <- data %>%
+  mutate(hour = hour(result_time)) %>%
+  group_by(hour) %>%
+  summarise(across(c(hamatop, hamabot), mean))
+
+set.seed(2022)
+cluster <- hour %>%
+  select(-hour) %>%
+  kmeans(centers = 2, nstart = 10)
+
+hour2 <- hour %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = hour, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "KMeans for Incident versus Reflected PAR", x = "Hour", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+grid.arrange(hour1, hour2, nrow = 1, ncol = 2)
+```
 
 # 5. Graph Critique
 
-(a) Since there are many zeros and values close to zero in \texttt{Incident PAR} and \texttt{Reflected PAR}, we first add 1 to all the data, and take log for transformation.
+(a) Since there are many zeros and values close to zero in \texttt{Incident PAR} and \texttt{Reflected PAR}, we filter all the zeros in the data, and take log for transformation.
+
+```{r fig.cap="log transform of data", fig.width=8, fig.height=3}
+plot1 <- data %>% 
+  filter(hamatop > 0) %>%
+  mutate(hamatop = log(hamatop)) %>%
+  ggplot() +
+  geom_histogram(aes(x = hamatop), bins = 40) +
+  labs(x = "mol/m2/s", y = "counts", title = "Incident PAR")
+
+plot2 <- data %>% 
+  filter(hamabot > 0) %>%
+  mutate(hamabot = log(hamabot)) %>%
+  ggplot() +
+  geom_histogram(aes(x = hamabot), bins = 40) +
+  labs(x = "mol/m2/2", y = "counts", title = "Reflected PAR")
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
 
 (b) From our understanding, the boxplots in figure 3(c) and 3(d) in the paper show the distributions of different variables over height. The paper suggests that spatial gradients might exist over the height of the tree. However, we don't think the boxplots conveying a complete message without observing the temporal readings. We might as well simulate figure 4 presented in the paper to plot trends of the mean values of four environmental variables against height over different time periods during a day, and create several trend plots over different days. We can see the spatial gradients clearly over time: \texttt{humidity} and \texttt{temperature}change across time periods within a day but the trends over height and over days are similar; \texttt{Incident PAR} and \texttt{Reflected PAR} change across time periods within a day but the trends over height and over days are similar.
 
-(c) We choose May Xth as our day for observation. The disadvantages of the first two plots are that there are too many lines in the plot. A way to simplify the plot is to divide the nodes grouped by different height levels and plot the change of \texttt{humidity} over time. We can also simplify the plots for \texttt{temperature}, \texttt{incident PAR} and \texttt{reflected PAR}.
+```{r}
+hour <- as.integer(format(data$result_time, "%H"))
+data$Period <- ifelse(hour < 6, "0-6",
+                      ifelse(hour < 13, "6-13", ifelse(hour < 20, "13-20", "20-24")))
+data$Day <- format(data$result_time, "%b %d")
+```
+
+```{r fig.cap="mean of humidity and temperature during a day and during days", fig.width=15, fig.height=5}
+# humidity
+humidity.period.mean <- data %>%
+  select(Period, humidity, height) %>%
+  group_by(Period, height) %>%
+  mutate(mean = mean(humidity)) %>%
+  select(Period, height, mean) %>%
+  unique()
+# mean by period
+fig1 <- humidity.period.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Period, color = Period), size = 0.3) +
+  labs(y = "humidity")
+# mean by days
+humidity.day.mean <- data %>%
+  select(Day, humidity, height) %>%
+  group_by(Day, height) %>%
+  mutate(mean = mean(humidity)) %>%
+  select(Day, height, mean) %>%
+  unique() %>%
+  arrange(Day)
+fig2 <- humidity.day.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  labs(y = "humidity")
+
+# temperature
+temp.period.mean <- data %>%
+  select(Period, humid_temp, height) %>%
+  group_by(Period, height) %>%
+  mutate(mean = mean(humid_temp)) %>%
+  select(Period, height, mean) %>%
+  unique()
+# mean by period
+fig3 <- temp.period.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Period, color = Period), size = 0.3) +
+  labs(y = "temperature")
+# mean by days
+temp.day.mean <- data %>%
+  select(Day, humid_temp, height) %>%
+  group_by(Day, height) %>%
+  mutate(mean = mean(humid_temp)) %>%
+  select(Day, height, mean) %>%
+  unique() %>%
+  arrange(Day)
+fig4 <- temp.day.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  labs(y = "temperature")
+
+grid.arrange(fig1, fig2, fig3, fig4, nrow = 2, ncol = 2)
+```
+
+```{r fig.cap="mean of Incident and Reflected PAR during a day and during days", fig.width=15, fig.height=5}
+# hamatop
+hamatop.period.mean <- data %>%
+  select(Period, hamatop, height) %>%
+  group_by(Period, height) %>%
+  mutate(mean = mean(hamatop)) %>%
+  select(Period, height, mean) %>%
+  unique()
+# mean by period
+fig5 <- hamatop.period.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Period, color = Period), size = 0.3) +
+  labs(y = "Incident PAR")
+# mean by days
+hamatop.day.mean <- data %>%
+  select(Day, hamatop, height) %>%
+  group_by(Day, height) %>%
+  mutate(mean = mean(hamatop)) %>%
+  select(Day, height, mean) %>%
+  unique() %>%
+  arrange(Day)
+fig6 <- temp.day.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  labs(y = "Incident PAR")
+
+# hamabot
+hamabot.period.mean <- data %>%
+  select(Period, hamabot, height) %>%
+  group_by(Period, height) %>%
+  mutate(mean = mean(hamabot)) %>%
+  select(Period, height, mean) %>%
+  unique()
+# mean by period
+fig7 <- hamabot.period.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Period, color = Period), size = 0.3) +
+  labs(y = "Reflected PAR")
+# mean by days
+temp.day.mean <- data %>%
+  select(Day, hamabot, height) %>%
+  group_by(Day, height) %>%
+  mutate(mean = mean(hamabot)) %>%
+  select(Day, height, mean) %>%
+  unique() %>%
+  arrange(Day)
+fig8 <- temp.day.mean %>%
+  ggplot() +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  labs(y = "Reflected PAR")
+grid.arrange(fig5, fig6, fig7, fig8, nrow = 2, ncol = 2)
+```
+
+(c) We choose May 1st as our day for observation. The disadvantages of the first two plots are that there are too many lines in the plot. A way to simplify the plot is to divide the nodes grouped by different height levels and plot the change of \texttt{humidity} over time. We can also simplify the plots for \texttt{temperature}, \texttt{incident PAR} and \texttt{reflected PAR}.
+
+```{r fig.cap="plot simplification", fig.width=15, fig.height=5}
+library(reshape2)
+# humid
+humid.height.mean <- data[data$Day == "May 01", ] %>%
+  select(result_time, humidity, height) %>%
+  mutate(height_group = cut(height, 5)) %>%
+  group_by(result_time, height_group) %>%
+  mutate(mean = mean(humidity)) %>%
+  select(result_time, height_group, mean) %>%
+  unique()
+
+fig1 <- humid.height.mean %>%
+  melt(id.vars = c("result_time", "height_group")) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = result_time, y = value, group = height_group, color = height_group), size = 0.3) +
+  scale_color_brewer(type = "equal", palette = "Set2") +
+  labs(x = "Time", y = "Humidity", color = "height")
+# temperature
+temp.height.mean <- data[data$Day == "May 01", ] %>%
+  select(result_time, humid_temp, height) %>%
+  mutate(height_group = cut(height, 5)) %>%
+  group_by(result_time, height_group) %>%
+  mutate(mean = mean(humid_temp)) %>%
+  select(result_time, height_group, mean) %>%
+  unique()
+
+fig2 <- temp.height.mean %>%
+  melt(id.vars = c("result_time", "height_group")) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = result_time, y = value, group = height_group, color = height_group), size = 0.3) +
+  scale_color_brewer(type = "equal", palette = "Set2") +
+  labs(x = "Time", y = "Temperature", color = "height")
+# hamatop
+hamatop.height.mean <- data[data$Day == "May 01", ] %>%
+  select(result_time, hamatop, height) %>%
+  mutate(height_group = cut(height, 5)) %>%
+  group_by(result_time, height_group) %>%
+  mutate(mean = mean(hamatop)) %>%
+  select(result_time, height_group, mean) %>%
+  unique()
+
+fig3 <- hamatop.height.mean %>%
+  melt(id.vars = c("result_time", "height_group")) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = result_time, y = value, group = height_group, color = height_group), size = 0.3) +
+  scale_color_brewer(type = "equal", palette = "Set2") +
+  labs(x = "Time", y = "Incident PAR", color = "height")
+# hamabot
+hamabot.height.mean <- data[data$Day == "May 01", ] %>%
+  select(result_time, hamabot, height) %>%
+  mutate(height_group = cut(height, 5)) %>%
+  group_by(result_time, height_group) %>%
+  mutate(mean = mean(hamabot)) %>%
+  select(result_time, height_group, mean) %>%
+  unique()
+
+fig4 <- hamabot.height.mean %>%
+  melt(id.vars = c("result_time", "height_group")) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = result_time, y = value, group = height_group, color = height_group), size = 0.3) +
+  scale_color_brewer(type = "equal", palette = "Set2") +
+  labs(x = "Time", y = "Reflected PAR", color = "height")
+grid.arrange(fig1, fig2, fig3, fig4, ncol = 2, nrow = 2)
+```
 
 (d) We can concatenate the fourth plots of (a) and (b) respectively and combine the bars with the same height value. This will allow us to see the overlap between \texttt{net-data} and \texttt{log-data}. We can improve the third plots of (a) and (b) respectively by using barplots instead of scatterplots. The second plots of (a) and (b) respectively feature too many boxplots which lack interpretability. A way to enhance interpretability is to partition the days into several groups and create boxplots based on the grouped result. The first plots of (a) and (b) respectively have the worst interpretation: the meaning of the x-axis is very vague to readers.
+
+```{r fig.cap="A better visualization for net and log data", fig.width=15, fig.height=5}
+log_data$category = "log"
+net_data$category = "net"
+all <- rbind(log_data, net_data)
+```
+```{r}
+library(scales)
+all %>%
+  select(Height, result_time, category) %>%
+  unique() %>%
+  ggplot() +
+  geom_point(aes(x = as.POSIXct(result_time), y = as.factor(Height), color = category, group = category), size = 0.01, position = position_dodge(width = 0.6)) +
+  labs(x = "Days", y = "Height") +
+  scale_x_datetime(breaks = date_breaks("5 day"))
+```

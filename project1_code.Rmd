@@ -1648,7 +1648,7 @@ data$Period <- ifelse(hour < 6, "0-6",
 data$Day <- format(data$result_time, "%b %d")
 ```
 
-```{r}
+```{r, fig.height=4}
 # humidity
 humidity.period.mean <- data %>%
   select(Period, humidity, height) %>%
@@ -1671,7 +1671,8 @@ humidity.day.mean <- data %>%
   arrange(Day)
 fig2 <- humidity.day.mean %>%
   ggplot() +
-  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3, 
+            show.legend = FALSE) +
   labs(y = "humidity")
 
 # temperature
@@ -1696,7 +1697,8 @@ temp.day.mean <- data %>%
   arrange(Day)
 fig4 <- temp.day.mean %>%
   ggplot() +
-  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3,
+            show.legend = FALSE) +
   labs(y = "temperature")
 
 # hamatop
@@ -1721,7 +1723,8 @@ hamatop.day.mean <- data %>%
   arrange(Day)
 fig6 <- temp.day.mean %>%
   ggplot() +
-  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3,
+            show.legend = FALSE) +
   labs(y = "Incident PAR")
 
 # hamabot
@@ -1746,13 +1749,14 @@ temp.day.mean <- data %>%
   arrange(Day)
 fig8 <- temp.day.mean %>%
   ggplot() +
-  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3) +
+  geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3,
+            show.legend = FALSE) +
   labs(y = "Reflected PAR")
 grid.arrange(fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, nrow = 4, ncol = 2)
 ```
 
 (c)
-```{r, fig.width=8}
+```{r, fig.width=6}
 library(reshape2)
 # humid
 humid.height.mean <- data[data$Day == "May 01", ] %>%
@@ -1818,11 +1822,13 @@ grid.arrange(fig1, fig2, fig3, fig4, ncol = 2, nrow = 2)
 ```
 
 (d)
+
 ```{r}
 log_data_loc$category = "log"
 net_data_loc$category = "net"
 all <- rbind(log_data_loc, net_data_loc)
 ```
+
 ```{r}
 library(scales)
 all %>%

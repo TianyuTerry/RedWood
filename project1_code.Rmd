@@ -1752,10 +1752,10 @@ grid.arrange(fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, nrow = 4, ncol = 2)
 ```
 
 (c)
-```{r}
+```{r, fig.width=8}
 library(reshape2)
 # humid
-humid.height.mean <- data[data$Day == "May 26", ] %>%
+humid.height.mean <- data[data$Day == "May 01", ] %>%
   select(result_time, humidity, height) %>%
   mutate(height_group = cut(height, 5)) %>%
   group_by(result_time, height_group) %>%
@@ -1770,7 +1770,7 @@ fig1 <- humid.height.mean %>%
   scale_color_brewer(type = "equal", palette = "Set2") +
   labs(x = "Time", y = "Humidity", color = "height")
 # temperature
-temp.height.mean <- data[data$Day == "May 26", ] %>%
+temp.height.mean <- data[data$Day == "May 01", ] %>%
   select(result_time, humid_temp, height) %>%
   mutate(height_group = cut(height, 5)) %>%
   group_by(result_time, height_group) %>%
@@ -1785,7 +1785,7 @@ fig2 <- temp.height.mean %>%
   scale_color_brewer(type = "equal", palette = "Set2") +
   labs(x = "Time", y = "Temperature", color = "height")
 # hamatop
-hamatop.height.mean <- data[data$Day == "May 26", ] %>%
+hamatop.height.mean <- data[data$Day == "May 01", ] %>%
   select(result_time, hamatop, height) %>%
   mutate(height_group = cut(height, 5)) %>%
   group_by(result_time, height_group) %>%
@@ -1800,7 +1800,7 @@ fig3 <- hamatop.height.mean %>%
   scale_color_brewer(type = "equal", palette = "Set2") +
   labs(x = "Time", y = "Incident PAR", color = "height")
 # hamabot
-hamabot.height.mean <- data[data$Day == "May 26", ] %>%
+hamabot.height.mean <- data[data$Day == "May 01", ] %>%
   select(result_time, hamabot, height) %>%
   mutate(height_group = cut(height, 5)) %>%
   group_by(result_time, height_group) %>%

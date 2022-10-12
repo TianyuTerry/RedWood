@@ -1,0 +1,419 @@
+---
+title: "project1_code_fast"
+author: "Tianyu Wu"
+date: "2022-10-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, cache=TRUE}
+log_data <- read_csv("RedwoodData/sonoma-data-log.csv")
+net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
+loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
+```
+
+```{r}
+date0 = read.delim('RedwoodData/sonoma-dates', header = F)
+# epochNums
+epochNums = substring(date0[1,1], 14, nchar(date0[1,1])-3)
+epochNums = strsplit(epochNums, " ")
+epochNums = as.numeric(unlist(epochNums))
+# epochDates
+epochDates = substring(date0[2,1], 16, nchar(date0[2,1])-4)
+epochDates = strsplit(epochDates, "\' \'")
+epochDates = as.POSIXlt(unlist(epochDates), format = "%a %b  %d %H:%M:%S %Y")
+# epochDays
+epochDays = substring(date0[3,1], 14, nchar(date0[3,1])-3)
+epochDays = strsplit(epochDays, " ")
+epochDays = as.numeric(unlist(epochDays))
+# create the new data frame
+new_date0 = data.frame(epochNums, epochDates, epochDays)
+colnames(new_date0)[1] = "epoch"
+colnames(new_date0)[2] = "result_time"
+colnames(new_date0)[3] = "result_days"
+```
+
+```{r}
+log_data <- merge(log_data, new_date0, by = "epoch") |>
+  mutate(result_time = result_time.y) |>
+  select(-result_days, -ends_with(".x"), -ends_with(".y"))
+
+net_data <- merge(net_data, new_date0, by = "epoch") |>
+  mutate(result_time = result_time.y) |>
+  select(-result_days, -ends_with(".x"), -ends_with(".y"))
+```
+
+```{r}
+ADC_FS = 1024
+V_ref = 0.6 
+net_data <- net_data |>
+  mutate(voltage = V_ref * ADC_FS / voltage)
+```
+
+```{r}
+nrow_log_data <- nrow(log_data)
+nrow_net_data <- nrow(net_data)
+log_data <- log_data |> drop_na()
+net_data <- net_data |> drop_na()
+nrow_log_data - nrow(log_data)
+nrow_net_data - nrow(net_data)
+```
+
+```{r}
+outer <- merge(x = net_data, y = log_data, by = c("nodeid", "epoch"), all = T)
+data_all <- outer |> 
+  mutate( humidity = case_when(!is.na(humidity.x) ~ humidity.x,
+                      TRUE ~ humidity.y),
+          humid_temp = case_when(!is.na(humid_temp.x) ~ humid_temp.x,
+                              TRUE ~ humid_temp.y),
+          hamatop = case_when(!is.na(hamatop.x) ~ hamatop.x,
+                              TRUE ~ hamatop.y),
+          hamabot = case_when(!is.na(hamabot.x) ~ hamabot.x,
+                              TRUE ~ hamabot.y),
+          voltage = case_when(!is.na(voltage.x) ~ voltage.x,
+                              TRUE ~ voltage.y),
+          result_time = case_when(!is.na(result_time.x) ~ result_time.x,
+                              TRUE ~ result_time.y),
+          depth = case_when(!is.na(depth.x) ~ depth.x,
+                              TRUE ~ depth.y),
+          parent = case_when(!is.na(parent.x) ~ parent.x,
+                                            TRUE ~ parent.y)) |>
+  select(-ends_with('.x'), -ends_with('.y'))
+```
+
+```{r}
+nrow(data_all)
+data_all <- merge(data_all, loc_data, by.x = "nodeid", by.y = "ID") |>
+  rename(height = Height,
+         direc = Direc,
+         dist = Dist,
+         tree = Tree)
+nrow(data_all)
+```
+
+```{r}
+variables = c("humidity", "humid_temp", "hamatop", "hamabot", "voltage")
+data <- data_all |>
+  filter(voltage > 2.4, voltage < 3, humid_temp < 100, humidity < 110, nodeid != 40)
+nrow(data)
+```
+
+```{r}
+data |>
+  mutate(day = as.POSIXct(round(result_time, "days"))) |>
+  dplyr::count(day) |>
+  arrange(day) |>
+  ggplot(aes(x = day, y = n)) +
+  geom_point() +
+  geom_vline(xintercept = as.numeric(as.POSIXct(c("2004-05-26")))) +
+  labs(x = "Day", y = "Count of data points per day") +
+  annotate("text", x = as.POSIXct(c("2004-05-31")), y = 10000,
+           label = "May 26", size = 4) +
+  theme_minimal()
+```
+
+```{r}
+data <- data |>
+  filter(result_time < as.POSIXct("2004-05-27"))
+nrow(data)
+```
+
+```{r fig.width=15, fig.height=8}
+library(lubridate)
+
+temp_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r}
+date_avg <- data |>
+  mutate(date = date(result_time)) |>
+  group_by(date) |>
+  summarise(avg_temp = mean(humid_temp))
+
+date_last <- data |>
+  mutate(date = date(result_time)) |>
+  group_by(nodeid) |>
+  summarise(date = max(date)) |>
+  mutate(last_day = 1)
+
+data |>
+  mutate(date = date(result_time)) |>
+  group_by(date, nodeid) |>
+  summarise(avg_temp_node = mean(humid_temp), .groups = "drop") |>
+  merge(date_avg, by = "date") |>
+  mutate(diff = abs(avg_temp - avg_temp_node)) |>
+  merge(date_last, by = c("date", "nodeid"), all.x = T) |>
+  mutate(last_day = replace_na(last_day, 0)) |>
+  filter(last_day == 1) |>
+  arrange(desc(diff))
+```
+
+```{r}
+data <- data |>
+  mutate(date = date(result_time)) |>
+  filter(nodeid != 3 | date != "2004-05-10", nodeid != 59 | date != "2004-05-19", nodeid != 27 | date != "2004-04-28",
+         nodeid != 78 | date != "2004-05-08", nodeid != 140, date != "2004-05-08", nodeid != 68 | date != "2004-05-06",
+         nodeid != 198 | date != "2004-05-10", nodeid != 16 | date != "2004-05-05",
+         nodeid != 136 | date != "2004-05-06", nodeid != 65 | date != "2004-05-06")
+nrow(data)
+```
+
+```{r, fig.width=15, fig.height=8}
+temp_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r, fig.width=15, fig.height=8}
+temp_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r}
+date_avg <- data |>
+  mutate(date = date(result_time)) |>
+  group_by(date) |>
+  summarise(avg_hum = mean(humidity))
+
+date_last <- data |>
+  mutate(date = date(result_time)) |>
+  group_by(nodeid) |>
+  summarise(date = max(date)) |>
+  mutate(last_day = 1)
+
+data |>
+  mutate(date = date(result_time)) |>
+  group_by(date, nodeid) |>
+  summarise(avg_hum_node = mean(humidity), .groups = "drop") |>
+  merge(date_avg, by = "date") |>
+  mutate(diff = abs(avg_hum - avg_hum_node)) |>
+  merge(date_last, by = c("date", "nodeid"), all.x = T) |>
+  mutate(last_day = replace_na(last_day, 0)) |>
+  # filter(last_day == 1) |>
+  arrange(desc(diff))
+```
+
+```{r}
+data <- data |>
+  mutate(date = date(result_time)) |>
+  filter(nodeid != 122 | date != "2004-05-07", nodeid != 15 | date != "2004-04-30")
+nrow(data)
+```
+
+```{r, fig.width=15, fig.height=8}
+temp_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = date(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  scale_x_date(date_breaks = "3 days", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+```{r, fig.width=15, fig.height=8}
+temp_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humid_temp, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humid_temp, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Temperature", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+humidity_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(humidity, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = humidity, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Relative Humidity", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+incident_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamatop, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamatop, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Incident PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+reflected_plot <- data %>%
+  group_by(date = hour(result_time), height) %>%
+  dplyr::summarise(across(hamabot, mean), .groups = "drop") %>%
+  ggplot(aes(x = date, y = hamabot, color = height, group = height)) +
+  geom_line() +
+  # scale_x_date(date_breaks = "2 hours", limits = c(as_date("2004-04-28"), as_date("2004-05-27")), expand = c(0,0), date_labels = "%B %d") +
+  scale_color_gradient(low = "orange", high = "blue") +
+  labs(title = "Reflected PAR", x = "", y = "", color = "Node Height") +
+  theme_bw()
+
+grid.arrange(temp_plot, humidity_plot, incident_plot, reflected_plot, ncol = 2, nrow = 2)
+```
+
+
+
+
+
+

@@ -1255,7 +1255,7 @@ data_all |>
   labs(x = "Day", y = "Count of data points per day") +
   annotate("text", x = as.POSIXct(c("2004-05-31")), y = 10000,
            label = "May 26", size = 4) +
-  theme_minimal()
+  theme_bw()
 ```
 
 ```{r}
@@ -1421,7 +1421,8 @@ eigs_cum <- cumsum(eigenvalues) /sum(eigenvalues)
 ggplot() + 
   geom_point(aes(x = 1:length(eigenvalues), y = eigs_cum)) + 
   geom_line(aes(x = 1:length(eigenvalues), y = eigs_cum)) +
-  labs(x = "first PCs", y = "fraction of total variance explained")
+  labs(x = "first PCs", y = "fraction of total variance explained") +
+  theme_bw()
 ```
 
 ## Part 4: Interesting findings
@@ -1466,6 +1467,46 @@ height %>%
 ```
 
 ```{r}
+hour <- data %>%
+  mutate(hour = hour(result_time)) %>%
+  group_by(hour) %>%
+  summarise(across(c(humidity, humid_temp), mean))
+
+set.seed(2022)
+cluster <- hour %>%
+  select(-hour) %>%
+  kmeans(centers = 2, nstart = 10)
+
+hour %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = hour, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "", x = "Hour", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+```
+
+```{r}
+hour <- data %>%
+  mutate(hour = hour(result_time)) %>%
+  group_by(hour) %>%
+  summarise(across(c(hamatop, hamabot), mean))
+
+set.seed(2022)
+cluster <- hour %>%
+  select(-hour) %>%
+  kmeans(centers = 2, nstart = 10)
+
+hour %>%
+  mutate(cluster = factor(cluster$cluster)) %>%
+  ggplot(aes(x = hour, fill = cluster, group = cluster)) +
+  geom_density(alpha = 0.7, color = FALSE) +
+  labs(title = "", x = "Hour", y = "", fill = "Cluster") +
+  scale_fill_viridis_d() +
+  theme_bw()
+```
+
+```{r}
 data %>%
   mutate(hour = hour(result_time),
          date = date(result_time)) %>%
@@ -1499,9 +1540,10 @@ df %>%
 
 ```{r}
 library(mclust)
+set.seed(2022)
 df <- data[as_date(data$result_time) == "2004-05-07",]
-df_scaled <- df |>
-  select(hamatop, hamabot) |>
+df_scaled <- df %>%
+  select(hamatop, hamabot) %>%
   mutate(hamatop = scale(hamatop),
          hamabot = scale(hamabot))
 model_gmm <- Mclust(df_scaled, G = 2)
@@ -1533,8 +1575,6 @@ data = cbind(data, data.matrix(pca$x)[, c(1, 2)])
 df1 <- data[as_date(data$result_time) == "2004-05-07", c("PC1", "PC2")]
 m <- c("average", "single", "complete", "ward")
 names(m) <- c("average", "single", "complete", "ward")
-m <- c("average")
-names(m) <- c("average")
 agg_coeff <- function(x){
   agnes(df1, method = x)$ac
 }

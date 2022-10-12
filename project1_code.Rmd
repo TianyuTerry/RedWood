@@ -1644,34 +1644,64 @@ grid.arrange(plot1, plot2, ncol = 2)
 ```{r, fig.height=4}
 box1 <- data %>%
   mutate(height = as.factor(height)) %>%
-  ggplot(aes(x = humidity, y = height)) +
+  ggplot(aes(x = humid_temp, y = height)) +
   geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
+  labs(title = "Temperature", x = "°C") +
   theme_bw()
 
 box2 <- data %>%
   mutate(height = as.factor(height)) %>%
-  ggplot(aes(x = humid_temp, y = height)) +
+  ggplot(aes(x = humidity, y = height)) +
   geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
-  labs(x = "temperature") +
+  labs(title = "Humidity", x = "%RH") +
   theme_bw()
 
 box3 <- data %>%
   mutate(height = as.factor(height)) %>%
   ggplot(aes(x = hamatop, y = height)) +
   geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = F) +
-  labs(x = "Incident PAR") +
+  labs(title = "Incident PAR", x = "μmol/m2/s") +
   theme_bw()
 
 box4 <- data %>%
   mutate(height = as.factor(height)) %>%
   ggplot(aes(x = hamabot, y = height)) +
   geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = F) +
-  labs(x = "Reflected PAR") +
+  labs(title = "Reflected PAR", x = "μmol/m2/s") +
   theme_bw()
 
 grid.arrange(box1, box2, box3, box4, ncol = 4)
 ```
 
+```{r}
+avg_temp <- data %>%
+  group_by(epoch) %>%
+  summarise(avg_temp = mean(humid_temp))
+
+box1 <- data %>%
+  merge(avg_temp, by = "epoch") %>%
+  mutate(height = as.factor(height),
+         diff = humid_temp - avg_temp) %>%
+  ggplot(aes(x = diff, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
+  labs(title = "Temperature") +
+  theme_bw()
+
+avg_hum <- data %>%
+  group_by(epoch) %>%
+  summarise(avg_hum = mean(humidity))
+
+box2 <- data %>%
+  merge(avg_hum, by = "epoch") %>%
+  mutate(height = as.factor(height),
+         diff = humidity - avg_hum) %>%
+  ggplot(aes(x = diff, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
+  labs(title = "Humidity") +
+  theme_bw()
+
+grid.arrange(box1, box2, ncol = 2)
+```
 
 
 ```{r}
@@ -1754,7 +1784,7 @@ hamatop.day.mean <- data %>%
   select(Day, height, mean) %>%
   unique() %>%
   arrange(Day)
-fig6 <- temp.day.mean %>%
+fig6 <- hamatop.day.mean %>%
   ggplot() +
   geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3,
             show.legend = FALSE) +
@@ -1789,6 +1819,7 @@ grid.arrange(fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, nrow = 4, ncol = 2)
 ```
 
 (c)
+
 ```{r, fig.width=6}
 library(reshape2)
 # humid

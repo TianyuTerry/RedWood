@@ -1546,7 +1546,7 @@ df %>%
 ```{r}
 library(mclust)
 set.seed(2022)
-df <- data[as_date(data$result_time) == "2004-05-07",]
+df <- data[as_date(data$result_time) == "2004-05-01",]
 df_scaled <- df %>%
   select(hamatop, hamabot) %>%
   mutate(hamatop = scale(hamatop),
@@ -1639,8 +1639,41 @@ plot2 <- data %>%
 grid.arrange(plot1, plot2, ncol = 2)
 ```
 
-
 (b)
+
+```{r, fig.height=4}
+box1 <- data %>%
+  mutate(height = as.factor(height)) %>%
+  ggplot(aes(x = humidity, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
+  theme_bw()
+
+box2 <- data %>%
+  mutate(height = as.factor(height)) %>%
+  ggplot(aes(x = humid_temp, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = T) +
+  labs(x = "temperature") +
+  theme_bw()
+
+box3 <- data %>%
+  mutate(height = as.factor(height)) %>%
+  ggplot(aes(x = hamatop, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = F) +
+  labs(x = "Incident PAR") +
+  theme_bw()
+
+box4 <- data %>%
+  mutate(height = as.factor(height)) %>%
+  ggplot(aes(x = hamabot, y = height)) +
+  geom_boxplot(outlier.colour = "black", outlier.size = 0.5, notch = F) +
+  labs(x = "Reflected PAR") +
+  theme_bw()
+
+grid.arrange(box1, box2, box3, box4, ncol = 4)
+```
+
+
+
 ```{r}
 hour <- as.integer(format(data$result_time, "%H"))
 data$Period <- ifelse(hour < 6, "0-6",

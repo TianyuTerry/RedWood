@@ -1519,27 +1519,6 @@ df %>%
 ```
 
 ```{r}
-df <- data[as_date(data$result_time) == "2004-05-07",] |>
-  filter(hamatop > 0, hamabot > 0)
-df_scaled <- df |>
-  select(hamatop, hamabot) |>
-  mutate(hamatop = scale(hamatop),
-         hamabot = scale(hamabot))
-model_gmm <- Mclust(df_scaled, G = 2)
-z_gmm <- apply(model_gmm$z, 1, which.max)
-df$cluster <- as.factor(z_gmm)
-```
-
-```{r}
-df %>%
-  ggplot() +
-  geom_point(aes(x = hamatop, y = hamabot, group = cluster, color = cluster))
-df %>%
-  ggplot() +
-  geom_point(aes(x = height, y = result_time, group = cluster, color = cluster))
-```
-
-```{r}
 # PCA
 library(ggfortify)
 pca

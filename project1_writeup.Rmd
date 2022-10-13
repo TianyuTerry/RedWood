@@ -77,18 +77,18 @@ colnames(new_date0)[3] = "result_days"
 
 ```{r}
 # standardized result_time by epoch
-log_data <- merge(log_data, new_date0, by = "epoch") |>
-  mutate(result_time = result_time.y) |>
+log_data <- merge(log_data, new_date0, by = "epoch") %>%
+  mutate(result_time = result_time.y) %>%
   select(-result_days, -ends_with(".x"), -ends_with(".y"))
 
-net_data <- merge(net_data, new_date0, by = "epoch") |>
-  mutate(result_time = result_time.y) |>
+net_data <- merge(net_data, new_date0, by = "epoch") %>%
+  mutate(result_time = result_time.y) %>%
   select(-result_days, -ends_with(".x"), -ends_with(".y"))
 ```
 
 (a)
 
-Variable voltage for two datasets are not in the same domain:
+Variable voltage for two datasets are not in the same domain.
 
 ```{r}
 plot1 <- log_data %>%
@@ -286,8 +286,8 @@ nodeid_top <- data %>%
                     select(nodeid) %>%
                     distinct()
 
-plot1 <- merge(data, nodeid_top, by = "nodeid") |>
-  mutate(nodeid = as.character(nodeid)) |>
+plot1 <- merge(data, nodeid_top, by = "nodeid") %>%
+  mutate(nodeid = as.character(nodeid)) %>%
   ggplot(aes(x = result_time, y = hamatop)) +
   geom_line(aes(colour = nodeid)) +
   labs(x = "", y = "Incident PAR")
@@ -300,8 +300,8 @@ nodeid_bottom <- data %>%
                     select(nodeid) %>%
                     distinct()
 
-plot2 <- merge(data, nodeid_bottom, by = "nodeid") |>
-  mutate(nodeid = as.character(nodeid)) |>
+plot2 <- merge(data, nodeid_bottom, by = "nodeid") %>%
+  mutate(nodeid = as.character(nodeid)) %>%
   ggplot(aes(x = result_time, y = hamabot)) +
   geom_line(aes(colour = nodeid)) +
   labs(x = "Date", y = "Reflected PAR")
@@ -315,25 +315,25 @@ grid.arrange(plot1, plot2, nrow = 2)
 Besides the outliers removed above, there are other outliers as well. From the analysis above we see that nodes tend to generate abnormal readings when their voltage runs low right before they are dead. When the reading is not extremely absurd, they cannot be detected by histograms/summary statistics but they are indeed problematic. We identify and remove some of this type of outliers by comparing the deviation of each node from the average reading of each day. We only consider the case that large deviation is at the last day certain node generates readings.
 
 ```{r}
-data <- data |>
-  mutate(date = date(result_time)) |>
+data <- data %>%
+  mutate(date = date(result_time)) %>%
   filter(nodeid != 3 | date != "2004-05-10", nodeid != 59 | date != "2004-05-19", nodeid != 27 | date != "2004-04-28",
          nodeid != 78 | date != "2004-05-08", nodeid != 140, date != "2004-05-08", nodeid != 68 | date != "2004-05-06",
          nodeid != 198 | date != "2004-05-10", nodeid != 16 | date != "2004-05-05",
          nodeid != 136 | date != "2004-05-06", nodeid != 65 | date != "2004-05-06")
 
-data <- data |>
-  mutate(date = date(result_time)) |>
+data <- data %>%
+  mutate(date = date(result_time)) %>%
   filter(nodeid != 122 | date != "2004-05-07", nodeid != 15 | date != "2004-04-30")
 ```
 
 # 3. Data Exploration
 
 ```{r fig.cap="Choose a specific date" ,fig.width=5, fig.height=3}
-data |>
-  mutate(day = as.POSIXct(round(result_time, "days"))) |>
-  dplyr::count(day) |>
-  arrange(day) |>
+data %>%
+  mutate(day = as.POSIXct(round(result_time, "days"))) %>%
+  dplyr::count(day) %>%
+  arrange(day) %>%
   ggplot(aes(x = day, y = n)) +
   geom_point() +
   geom_vline(xintercept = as.numeric(as.POSIXct(c("2004-05-26")))) +
@@ -344,7 +344,7 @@ data |>
 ```
 
 ```{r}
-data <- data |>
+data <- data %>%
   filter(result_time < as.POSIXct("2004-05-27"))
 ```
 

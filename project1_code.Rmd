@@ -1803,14 +1803,14 @@ fig7 <- hamabot.period.mean %>%
   geom_line(mapping = aes(x = height, y = mean, group = Period, color = Period), size = 0.3) +
   labs(y = "Reflected PAR")
 # mean by days
-temp.day.mean <- data %>%
+hamabot.day.mean <- data %>%
   select(Day, hamabot, height) %>%
   group_by(Day, height) %>%
   mutate(mean = mean(hamabot)) %>%
   select(Day, height, mean) %>%
   unique() %>%
   arrange(Day)
-fig8 <- temp.day.mean %>%
+fig8 <- hamabot.day.mean %>%
   ggplot() +
   geom_line(mapping = aes(x = height, y = mean, group = Day, color= Day), size = 0.3,
             show.legend = FALSE) +

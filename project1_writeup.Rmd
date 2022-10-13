@@ -52,10 +52,10 @@ The study first measures traditional climate variables: temperature, humidity an
 # 2. Data Cleaning
 
 ```{r}
-# log_data <- read_csv("RedwoodData/sonoma-data-log.csv")
-# net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
-# loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
-# date0 = read.delim("RedwoodData/sonoma-dates", header = F)
+log_data <- read_csv("RedwoodData/sonoma-data-log.csv")
+net_data <- read_csv("RedwoodData/sonoma-data-net.csv")
+loc_data <- read.table("RedwoodData/mote-location-data.txt", header = T, sep = "")
+date0 = read.delim("RedwoodData/sonoma-dates", header = F)
 # epochNums
 epochNums = substring(date0[1,1], 14, nchar(date0[1,1])-3)
 epochNums = strsplit(epochNums, " ")
@@ -75,8 +75,6 @@ colnames(new_date0)[2] = "result_time"
 colnames(new_date0)[3] = "result_days"
 ```
 
-(a)
-
 ```{r}
 # standardized result_time by epoch
 log_data <- merge(log_data, new_date0, by = "epoch") |>
@@ -88,24 +86,91 @@ net_data <- merge(net_data, new_date0, by = "epoch") |>
   select(-result_days, -ends_with(".x"), -ends_with(".y"))
 ```
 
+(a)
+
+Variable voltage for two datasets are not in the same domain:
+
+```{r}
+plot1 <- log_data %>%
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Voltage", y = "Count", title = "Log Dataset") +
+           theme_bw()
+
+plot2 <- net_data %>%
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Voltage", y = "Count", title = "Net Dataset") +
+           theme_bw()
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+We know from the paper that the incident and reflected PAR measurements were collected by two Hamamatsu S1087 photodiodes interfaced to the 10-bit
+ADC on Mica2Dot. From user manual (http://www-db.ics.uci.edu/pages/research/quasar/MPR-MIB%20Series%20User%20Manual%207430-0021-06_A.pdf Page 25) we found the formula of conversion to be $V_{batt} = V_{ref} \times ADC\_FS / ADC\_Count$. The voltage data from net dataset is converted to the right range after the conversion.
+
 ```{r}
 # standardize voltage
 ADC_FS = 1024
 V_ref = 0.6 
-net_data <- net_data |>
+net_data <- net_data %>%
   mutate(voltage = V_ref * ADC_FS / voltage)
 ```
 
 ```{r}
-# NA drop
-log_data <- log_data |> drop_na()
-net_data <- net_data |> drop_na()
+plot1 <- log_data %>%
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Voltage", y = "Count", title = "Log Dataset") +
+           theme_bw()
+
+plot2 <- net_data %>%
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Voltage", y = "Count", title = "Net Dataset") +
+           theme_bw()
+
+grid.arrange(plot1, plot2, ncol = 2)
 ```
+
+(b)
+
+It turns out that when a row contains any missing values, all four variables of interests are missing. Missing values are found in between 2004-04-30 and 2004-05-25 (27 days) for log dataset and in between 2004-05-07 and 2004-05-29 (22 days) for net dataset. These two time period almost span the entire experiment. Most of the time there is only one record with missing value for each epoch, which indicates that most of the time only one single node is not working well. In the end, 8270 rows of missing values are dropped from log dataset and 4262 rows are dropped from net dataset.
+
+```{r}
+log_data_na <- log_data[rowSums(is.na(log_data)) > 0,]
+plot1 <- log_data_na %>%
+  select(result_time) %>%
+  ggplot(aes(x = result_time)) +
+  geom_bar() +
+  labs(x = "Date", y = "Count of NAs", title = "Log Dataset") +
+  theme_bw()
+
+net_data_na <- net_data[rowSums(is.na(net_data)) > 0,]
+plot2 <- net_data_na %>%
+  select(result_time) %>%
+  ggplot(aes(x = result_time)) +
+  geom_bar() +
+  labs(x = "Date", y = "Count of NAs", title = "Net Dataset") +
+  theme_bw()
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r}
+# NA drop
+log_data <- log_data %>% drop_na()
+net_data <- net_data %>% drop_na()
+```
+
+(c)
+
+First, we combine log data and net data together. The general strategy is outer join to keep as much data as possible. Given the fact that time span of log dataset covers that of net dataset and net dataset has more data records, we decide that when both dataset contain the same data record, we keep the one inside net dataset. The next step is the inner join with location dataset. After joining there are 327228/333319 rows remaining.
 
 ```{r}
 # combine log and net data
 outer <- merge(x = net_data, y = log_data, by = c("nodeid", "epoch"), all = T)
-data_all <- outer |> 
+data_all <- outer %>% 
   mutate( humidity = case_when(!is.na(humidity.x) ~ humidity.x,
                       TRUE ~ humidity.y),
           humid_temp = case_when(!is.na(humid_temp.x) ~ humid_temp.x,
@@ -121,24 +186,135 @@ data_all <- outer |>
           depth = case_when(!is.na(depth.x) ~ depth.x,
                               TRUE ~ depth.y),
           parent = case_when(!is.na(parent.x) ~ parent.x,
-                                            TRUE ~ parent.y)) |>
+                                            TRUE ~ parent.y)) %>%
   select(-ends_with('.x'), -ends_with('.y'))
 ```
 
 ```{r}
 # incorporate location data
-data_all <- merge(data_all, loc_data, by.x = "nodeid", by.y = "ID") |>
+data_all <- merge(data_all, loc_data, by.x = "nodeid", by.y = "ID") %>%
   rename(height = Height,
          direc = Direc,
          dist = Dist,
          tree = Tree)
 ```
 
+(d)
+
+First we extract some nodes with abnormal readings and verified the finding in the thesis that abnormal readings are correlated with abnormal voltage.
+
+```{r}
+plot1 <- data_all %>%
+  filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) %>%
+  mutate(nodeid = as.character(nodeid)) %>%
+  ggplot(aes(x = result_time, y = humid_temp)) +
+  geom_line(aes(colour = nodeid)) +
+  labs(x = "", y = "Temperature") +
+  theme_bw()
+
+plot2 <- data_all %>%
+  filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) %>%
+  mutate(nodeid = as.character(nodeid)) %>%
+  ggplot(aes(x = result_time, y = humidity)) +
+  geom_line(aes(colour = nodeid)) +
+  labs(x = "", y = "Humidity") +
+  theme_bw()
+
+plot3 <- data_all %>%
+  filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) %>%
+  mutate(nodeid = as.character(nodeid)) %>%
+  ggplot(aes(x = result_time, y = voltage)) +
+  labs(x = "Date", y = "Voltage") +
+  geom_line(aes(colour = nodeid)) +
+  theme_bw()
+
+grid.arrange(plot1, plot2, plot3, nrow = 3)
+```
+
+After removing observations with voltage lower than 2.4 and larger than 3, we manually identified some easy outliers, such as 2 temperature outliers from node 123, 3 humidity outliers from node 118 and incident PAR outliers from node 40. After checking all 98 readings from node 40, we decided to remove node 40 entirely as node 40 fails to operate almost at the beginning of the experiment.
+
 ```{r}
 # outlier removal, fast version
-data <- data_all |>
+data <- data_all %>%
   filter(voltage > 2.4, voltage < 3, humid_temp < 100, humidity < 110, nodeid != 40)
+```
 
+There are obviously no more outliers for voltage, temperature and humidity from histogram. For rest of the two variables, even if we removed observations with reading 0s to make the plot look better, the histograms are still not convincing enough. To check the behavior of the long-tailed incident and reflected PAR, we plot the overall trend of PAR against time for some of the nodes with extremely high readings. All nodes are perfectly aligned with almost the same absolute value, which indicates that the readings are valid.
+
+```{r, fig.height=5}
+plot1 <- data %>%
+           ggplot(aes(x = voltage)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Voltage", y = "Count") +
+           theme_bw()
+
+plot2 <- data %>%
+           ggplot(aes(x = humid_temp)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Temperature", y = "Count") +
+           theme_bw()
+
+plot3 <- data %>%
+           ggplot(aes(x = humidity)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Humidity", y = "Count") +
+           theme_bw()
+
+plot4 <- data %>%
+           filter(hamatop > 0) %>%
+           ggplot(aes(x = hamatop)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Incident PAR", y = "Count") +
+           theme_bw()
+
+plot5 <- data %>%
+           filter(hamabot > 0) %>%
+           ggplot(aes(x = hamabot)) +
+           geom_histogram(na.rm = T, bins = 50) +
+           labs(x = "Reflected PAR", y = "Count") +
+           theme_bw()
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5, nrow = 5)
+```
+
+```{r}
+nodeid_top <- data %>%
+                    mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
+                                                TRUE ~ 0)) %>%
+                    dplyr::count(nodeid, abnormal) %>%
+                    filter(abnormal == 1, n >= 900) %>%
+                    select(nodeid) %>%
+                    distinct()
+
+plot1 <- merge(data, nodeid_top, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = result_time, y = hamatop)) +
+  geom_line(aes(colour = nodeid)) +
+  labs(x = "", y = "Incident PAR")
+
+nodeid_bottom <- data %>%
+                    mutate(abnormal = case_when(hamabot >= 5000 ~ 1,
+                                                TRUE ~ 0)) %>%
+                    dplyr::count(nodeid, abnormal) %>%
+                    filter(abnormal == 1, n >= 100) %>%
+                    select(nodeid) %>%
+                    distinct()
+
+plot2 <- merge(data, nodeid_bottom, by = "nodeid") |>
+  mutate(nodeid = as.character(nodeid)) |>
+  ggplot(aes(x = result_time, y = hamabot)) +
+  geom_line(aes(colour = nodeid)) +
+  labs(x = "Date", y = "Reflected PAR")
+
+
+grid.arrange(plot1, plot2, nrow = 2)
+```
+
+(e)
+
+Besides the outliers removed above, there are other outliers as well. From the analysis above we see that nodes tend to generate abnormal readings when their voltage runs low right before they are dead. When the reading is not extremely absurd, they cannot be detected by histograms/summary statistics but they are indeed problematic. We identify and remove some of this type of outliers by comparing the deviation of each node from the average reading of each day. We only consider the case that large deviation is at the last day certain node generates readings.
+
+```{r}
 data <- data |>
   mutate(date = date(result_time)) |>
   filter(nodeid != 3 | date != "2004-05-10", nodeid != 59 | date != "2004-05-19", nodeid != 27 | date != "2004-04-28",
@@ -150,16 +326,6 @@ data <- data |>
   mutate(date = date(result_time)) |>
   filter(nodeid != 122 | date != "2004-05-07", nodeid != 15 | date != "2004-04-30")
 ```
-
-(a)
-
-(b)
-
-(c)
-
-(d)
-
-(e)
 
 # 3. Data Exploration
 
@@ -721,6 +887,7 @@ log_data$category = "log"
 net_data$category = "net"
 all <- rbind(log_data, net_data)
 ```
+
 ```{r}
 library(scales)
 all %>%

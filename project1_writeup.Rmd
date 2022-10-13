@@ -90,7 +90,7 @@ net_data <- merge(net_data, new_date0, by = "epoch") %>%
 
 Variable voltage for two datasets are not in the same domain.
 
-```{r}
+```{r, fig.cap="Raw voltage histogram"}
 plot1 <- log_data %>%
            ggplot(aes(x = voltage)) +
            geom_histogram(na.rm = T, bins = 50) +
@@ -117,7 +117,7 @@ net_data <- net_data %>%
   mutate(voltage = V_ref * ADC_FS / voltage)
 ```
 
-```{r}
+```{r, fig.cap="standardized voltage histogram"}
 plot1 <- log_data %>%
            ggplot(aes(x = voltage)) +
            geom_histogram(na.rm = T, bins = 50) +
@@ -137,7 +137,7 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 It turns out that when a row contains any missing values, all four variables of interests are missing. Missing values are found in between 2004-04-30 and 2004-05-25 (27 days) for log dataset and in between 2004-05-07 and 2004-05-29 (22 days) for net dataset. These two time period almost span the entire experiment. Most of the time there is only one record with missing value for each epoch, which indicates that most of the time only one single node is not working well. In the end, 8270 rows of missing values are dropped from log dataset and 4262 rows are dropped from net dataset.
 
-```{r}
+```{r, fig.cap="Count of NAs for each epoch"}
 log_data_na <- log_data[rowSums(is.na(log_data)) > 0,]
 plot1 <- log_data_na %>%
   select(result_time) %>%
@@ -203,7 +203,7 @@ data_all <- merge(data_all, loc_data, by.x = "nodeid", by.y = "ID") %>%
 
 First we extract some nodes with abnormal readings and verified the finding in the thesis that abnormal readings are correlated with abnormal voltage.
 
-```{r}
+```{r, fig.cap="correlation between abnormal readings and low voltage"}
 plot1 <- data_all %>%
   filter(nodeid == 78 | nodeid == 123 | nodeid == 145 | nodeid == 3 | nodeid == 141) %>%
   mutate(nodeid = as.character(nodeid)) %>%
@@ -241,7 +241,7 @@ data <- data_all %>%
 
 There are obviously no more outliers for voltage, temperature and humidity from histogram. For rest of the two variables, even if we removed observations with reading 0s to make the plot look better, the histograms are still not convincing enough. To check the behavior of the long-tailed incident and reflected PAR, we plot the overall trend of PAR against time for some of the nodes with extremely high readings. All nodes are perfectly aligned with almost the same absolute value, which indicates that the readings are valid.
 
-```{r, fig.height=5}
+```{r, fig.cap="Histogram after outlier objection", fig.height=5}
 plot1 <- data %>%
            ggplot(aes(x = voltage)) +
            geom_histogram(na.rm = T, bins = 50) +
@@ -277,7 +277,7 @@ plot5 <- data %>%
 grid.arrange(plot1, plot2, plot3, plot4, plot5, nrow = 5)
 ```
 
-```{r}
+```{r, fig.cap="Large-reading nodes' pattern against time"}
 nodeid_top <- data %>%
                     mutate(abnormal = case_when(hamatop >= 100000 ~ 1,
                                                 TRUE ~ 0)) %>%
@@ -349,7 +349,9 @@ data <- data %>%
 ```
 
 
-(a) We decide to present two scatterplots that shows significant linear relationships: \texttt{Reflected PAR} versus \texttt{Incident PAR}, \texttt{Humidity} versus \texttt{Temperature}. The time period chosen is the first week of the data collection process. The reason for this choice of time period is that some nodes are falling apart gradually and that the relationship remains similar across future periods. The plot shows a positive relationship between reflected PAR and incident par. This follows our belief, since both variables are measuring the amount of sunlight. However, as the scatter points indicate, the true relationship between these two variables may not be linear. The plot shows a strong negative relationship between relative humidity and temperature. This is consistent with the observation mentioned in the paper: warm days are dryer and cold days are more humid in the experiment site.
+(a) 
+
+We decide to present two scatter plots that show significant linear relationships: \texttt{Reflected PAR} versus \texttt{Incident PAR}, \texttt{Humidity} versus \texttt{Temperature}. The time period chosen is the first week of the data collection process. The reason for this choice of time period is that some nodes are falling apart gradually and that the relationship remains similar across future periods. The plot shows a positive relationship between reflected PAR and incident par. This follows our belief, since both variables are measuring the amount of sunlight. However, as the scatter points indicate, the true relationship between these two variables may not be linear. The plot shows a strong negative relationship between relative humidity and temperature. This is consistent with the observation mentioned in the paper: warm days are dryer and cold days are more humid in the experiment site.
 
 ```{r fig.cap="Scatterplots: Inflected vs Reflected PAR, Temperature vs Humidity", fig.width=8, fig.height=3}
 fig1 <- data %>%

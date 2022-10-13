@@ -1,8 +1,13 @@
 # RedWood
+
 Data Analysis Project for RedWood Dataset
 
-Commit these two files for every update:
+Files to look at:
 
 1. Writeup file: project1_writeup.Rmd
 
-2. Code file: project1_code.Rmd
+This is the file generating the final report and has the cleanest code possible.
+
+2. Code Development file: project1_code.Rmd
+
+This is the file used for development and contains almost all the code.

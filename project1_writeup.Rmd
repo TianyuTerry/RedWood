@@ -5,7 +5,8 @@ author:
 - Tianyu Wu
 date: "2022/10/13"
 output:
-  pdf_document
+  pdf_document:
+    dev: png
 fontsize: 11pt
 ---
 
@@ -13,7 +14,9 @@ fontsize: 11pt
 knitr::opts_chunk$set(
   echo = FALSE,
   warning = FALSE,
-  message = FALSE
+  message = FALSE,
+  dev="png",
+  cache = TRUE
   )
 ```
 
@@ -28,6 +31,7 @@ library(mixtools)
 library(lubridate)
 library(reshape2)
 library(scales)
+library(magick)
 ```
 
 # 1. Data Collection
@@ -586,9 +590,8 @@ grid.arrange(plot1, plot2, ncol = 2)
 
 (b) We apply PCA to the four variables with all the observations after scaling. From 3(d), the first two PCs explain the majority of the information. From the PC scores, \texttt{humidity} and \texttt{temperature} are more important for PC1. \texttt{Incident PAR} and \texttt{reflected PAR} are more important for PC2. From Figure, we see \texttt{humidity} and \texttt{temperature} almost have the opposite effect on PC1 and PC2. This is consistent with the fact that \texttt{humidity} and \texttt{temperature} have a negative linear relation, as shown in Part 3.
 
-```{r fig.cap="pca", fig.width=6, fig.height=4}
+```{r fig.cap="pca", fig.width=5, fig.height=3}
 # PCA
-library(ggfortify)
 autoplot(pca, col = "hamabot", label = FALSE, loadings.label = TRUE) +
   theme_bw()
 ```
